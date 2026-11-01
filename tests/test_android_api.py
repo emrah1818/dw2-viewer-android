@@ -3,7 +3,7 @@
 Aufruf:  python tests/test_android_api.py
 Tabellen- und Spielstandlayouts stammen aus den Tests der Desktop-Version (v3.8/v4.0).
 """
-import json, os, shutil, struct, subprocess, sys, tempfile
+import json, os, shutil, struct, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,15 +58,46 @@ def dir_record(name, lba, size, directory=False):
     return bytes(rec)
 
 
+def native_model(bones=2, tim=512):
+    """Kleines gültiges DW2-Modell (aus den Desktop-Tests v8)."""
+    begin = (12 + 16 * bones + 24 + 3) // 4 * 4; data = bytearray(tim + 0x4040 + 4)
+    struct.pack_into('<III', data, 0, tim, tim + 0x4040, bones); cursor = begin; pointers = [[], [], []]
+    for bone in range(bones):
+        pointers[0].append(cursor); struct.pack_into('<IH', data, cursor, 4, 0)
+        for j, coords in enumerate(((0, 0, 0), (20, 0, 0), (0, -20, 0), (20, -20, 0))): struct.pack_into('<hhh', data, cursor + 6 + j * 6, *coords)
+        cursor = (cursor + 30 + 3) // 4 * 4; pointers[1].append(cursor); struct.pack_into('<IHhhh', data, cursor, 1, 0, 0, 0, 4096); cursor += 12
+        pointers[2].append(cursor); struct.pack_into('<II', data, cursor, 0, 1); p = cursor + 8
+        data[p:p + 8] = bytes([0, 1, 2, 3, 0, 0, 0, 0]); data[p + 8:p + 16] = bytes([0, 0, 7, 0, 0, 3, 7, 3])
+        struct.pack_into('<HHII', data, p + 16, 224 * 64, 0, 0, 0); cursor += 36
+    for i, table in enumerate(pointers): struct.pack_into(f'<{bones}I', data, 12 + i * bones * 4, *table)
+    struct.pack_into(f'<{bones}I', data, 12 + 12 * bones, *range(bones))
+    pos = 12 + 16 * bones; data[pos:pos + 20] = bytes([255, 0, 0, 0, 0, 0, 0, 0, 0, 0]) * 2
+    struct.pack_into('<III4H', data, tim, 16, 8, 44, 0, 0, 256, 1); struct.pack_into('<I4H', data, tim + 52, 16396, 0, 0, 32, 256)
+    data[tim + 64:tim + 0x3840] = b'\x11' * (0x3840 - 64); struct.pack_into('<1024H', data, tim + 0x3840, *([0, 31] + [0] * 1022))
+    return bytes(data)
+
+
+def animation_bytes():
+    from dw2studio.core.rig_animation import D, rotation_xyz
+    import numpy as np
+    out = bytearray(116); struct.pack_into('<7I', out, 0, 0, 44, 68, 0, 28, 35, 0)
+    out[28:35] = bytes([0, 0, 0, 1, 255, 0, 0]); out[35:42] = bytes([0, 1, 0, 0, 254, 1, 0])
+    def matrix(offset, rotation, translation):
+        r = D @ rotation @ D; values = np.rint(np.r_[r.T.flatten() * 4096, D @ translation]).astype(int); struct.pack_into('<12h', out, offset, *values)
+    matrix(44, np.eye(3), np.array([0, 0, 0])); matrix(68, np.eye(3), np.array([0, 20, 0])); matrix(92, rotation_xyz([0, 0, 90]), np.array([0, 20, 0]))
+    return bytes(out)
+
+
 def make_iso(folder):
-    files = {**tables(), 'M003AGUM.BIN': b'\x00' * 100, 'A003AGUM.BIN': b'\x00' * 100}
-    sectors = [bytearray(2048) for _ in range(60)]
+    files = {**tables(), 'M003AGUM.BIN': native_model(), 'A003AGUM.BIN': animation_bytes()}
+    sectors = [bytearray(2048) for _ in range(80)]
     root = dir_record('\x00', 18, 2048, True) + dir_record('\x01', 18, 2048, True)
     lba = 20
     for name, data in files.items():
         root += dir_record(name + ';1', lba, len(data))
-        sectors[lba][:len(data)] = data
-        lba += 1
+        for i in range((len(data) + 2047) // 2048):
+            chunk = data[i * 2048:(i + 1) * 2048]; sectors[lba + i][:len(chunk)] = chunk
+        lba += (len(data) + 2047) // 2048
     sectors[18][:len(root)] = root
     pvd = sectors[16]; pvd[0] = 1; pvd[1:6] = b'CD001'; pvd[40:72] = b'DW2TEST'.ljust(32)
     pvd[156:190] = dir_record('\x00', 18, 2048, True)[:34].ljust(34, b'\0')
@@ -85,18 +116,9 @@ def make_save(folder):
     path = Path(folder) / 'save.sav'; path.write_bytes(data); return path
 
 
-def build_stub(folder):
-    src = Path(folder) / 'stub.cpp'
-    src.write_text('#include <cstdio>\n#include <string>\nextern "C" int dw2_convert(const char*s,const char*d){std::string p=std::string(d)+"/M003AGUM.gltf";FILE*f=fopen(p.c_str(),"wb");if(!f)return 2;fputs("{\\"asset\\":{\\"version\\":\\"2.0\\"},\\"animations\\":[{\\"name\\":\\"Idle\\"},{\\"name\\":\\"Walk\\"}]}",f);fclose(f);return 0;}')
-    lib = Path(folder) / 'libdw2conv.so'
-    subprocess.run(['g++', '-shared', '-fPIC', str(src), '-o', str(lib)], check=True)
-    return lib
-
-
 def run():
     tmp = Path(tempfile.mkdtemp())
     try:
-        os.environ['DW2_CONVERTER_LIB'] = str(build_stub(tmp))
         api.configure(str(tmp / 'files'), str(tmp))
         iso = make_iso(tmp)
         info = ok('open_image', str(iso)); assert info['count'] == 1, info
@@ -139,8 +161,16 @@ def run():
         exp = ok('roster_export', 'spielstand'); assert Path(exp['path']).is_file()
         ok('roster_open', exp['path']); assert ok('roster_records', 3)[0]['hp'] == 400
         # Modell (Stub-Konverter) inkl. Cache-Treffer
-        m = ok('prepare_model', 3); assert m['animations'] == ['Idle', 'Walk'], m
-        assert (tmp / 'files/viewer' / m['url']).is_file() and ok('prepare_model', 3)['url'] == m['url']
+        m = ok('prepare_model', 3); assert m['animations'] == ['anim_A0', 'anim_A1'], m
+        gltf = json.loads((tmp / 'files/viewer' / m['url']).read_text())
+        assert len(gltf['meshes']) == 2 and len(gltf['animations']) == 2 and gltf['images'][0]['uri'].startswith('data:image/png')
+        assert gltf['scenes'][0]['extras']['blinking_data'][0] == 255 and gltf['nodes'][0]['children']
+        assert ok('prepare_model', 3)['url'] == m['url']
+        tex = ok('texture_list', 3); assert tex['slots'], tex
+        png = ok('texture_export', 3, 0, 'tex.png'); assert Path(png['path']).read_bytes()[:4] == b'\x89PNG'
+        glb = ok('model_export', 3, 'glb', 'agumon'); assert Path(glb['path']).read_bytes()[:4] == b'glTF'
+        # Textur-/Namensänderung im Modell: neuer Cache-Ordner, alte Datei bleibt
+        assert ok('prepare_model', 3)['animations']
         # Fehler kommen als JSON zurück
         assert not call('rename', 999, 'X')['ok'] and not call('gibt_es_nicht')['ok']
         print('Alle Android-API-Tests bestanden')

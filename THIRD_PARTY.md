@@ -1,7 +1,6 @@
 # Drittanbieter-Komponenten
 
-- dw2_model_converter von jype (MIT) – wird beim Build von https://github.com/jype/dw2_model_converter geholt und als libdw2conv.so kompiliert. Lizenz: native/dw2_model_converter_LICENSE
-- glm, nlohmann/json, stb, tinygltf (MIT bzw. Public Domain) – Header für den Konverter
+- Modell-/Animationsformat nach dw2_model_converter von jype (MIT, 2024); auf Android als Python-Port (dw2studio/core/native_gltf.py). Lizenz: licenses/dw2_model_converter_LICENSE
 - three.js (MIT) – 3D-Darstellung
 - Chaquopy (MIT), NumPy (BSD), Pillow (HPND) – Python auf Android
 

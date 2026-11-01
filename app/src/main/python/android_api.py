@@ -393,8 +393,8 @@ def delete_export(path):
 
 # --------------------------------------------------------------------------- 3D-Modell
 def _convert(source, output):
-    from dw2studio.core import native_converter
-    native_converter.convert(NATIVE_DIR, source, output)
+    from dw2studio.core.native_gltf import convert_folder
+    convert_folder(source, output)
 
 
 def prepare_model(identifier):

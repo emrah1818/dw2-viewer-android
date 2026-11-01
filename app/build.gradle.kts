@@ -7,7 +7,6 @@ plugins {
 android {
     namespace = "app.dw2viewer"
     compileSdk = 36
-    ndkVersion = "27.2.12479018"
 
     defaultConfig {
         applicationId = "app.dw2viewer.studio"
@@ -16,19 +15,6 @@ android {
         versionCode = 400
         versionName = "4.0.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
-        externalNativeBuild {
-            cmake {
-                cppFlags += listOf("-std=c++17", "-fexceptions", "-frtti")
-                arguments += listOf("-DANDROID_STL=c++_static")
-            }
-        }
-    }
-
-    externalNativeBuild {
-        cmake {
-            path = file("../native/CMakeLists.txt")
-            version = "3.22.1"
-        }
     }
 
     // Signierung für die Veröffentlichung: Werte kommen aus GitHub-Secrets (siehe ANLEITUNG).
