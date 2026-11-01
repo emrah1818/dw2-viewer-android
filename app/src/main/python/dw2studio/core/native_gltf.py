@@ -67,12 +67,15 @@ def _tim(native, model):
     if t + 0x4040 > len(native) or struct.unpack_from('<II', native, t) != (16, 8) \
             or struct.unpack_from('<I', native, t + 52)[0] != 16396 or struct.unpack_from('<HH', native, t + 60) != (32, 256):
         raise ValueError('Nicht unterstützte DW2-TIM-Struktur (erwartet 128×256, 4 Bit).')
-    raw = np.frombuffer(native, dtype=np.uint8, count=0x4040 - 2048 - 64, offset=t + 64)
+    # Wie der Original-Konverter: alle 256 Zeilen als Pixel lesen. Die unteren 32
+    # Zeilen enthalten zugleich die Paletten, werden aber von manchen Flächen als
+    # Farbquelle benutzt (einfarbige Teile). Sie durchsichtig zu lassen erzeugt Löcher.
+    raw = np.frombuffer(native, dtype=np.uint8, count=0x4040 - 64, offset=t + 64)
     indices = np.empty(raw.size * 2, dtype=np.uint8)
     indices[0::2] = raw & 15
     indices[1::2] = raw >> 4
     words = np.frombuffer(native, dtype='<u2', count=1024, offset=t + 0x4040 - 2048)
-    return indices.reshape(224, 128), words
+    return indices.reshape(256, 128), words
 
 
 def material_keys(model):
@@ -99,7 +102,7 @@ def texture_images(native, indices=None):
         black = (r | g | b) == 0
         flag = (w & 0x8000) != 0
         alpha = np.where(black, np.where(flag, 255, 0), np.where(flag & stp, 127, 255))
-        rgba[:224, :, 0], rgba[:224, :, 1], rgba[:224, :, 2], rgba[:224, :, 3] = r, g, b, alpha
+        rgba[..., 0], rgba[..., 1], rgba[..., 2], rgba[..., 3] = r, g, b, alpha
         images.append(Image.fromarray(rgba, 'RGBA'))
     return images
 
@@ -122,7 +125,7 @@ def convert_model(native, animations, target):
            'scenes': [{'nodes': [], 'extras': {'blinking_data': list(native[model.blink_offset:model.blink_offset + 24])}}],
            'nodes': [], 'meshes': [], 'animations': [], 'buffers': [], 'bufferViews': [], 'accessors': [],
            'materials': [], 'textures': [], 'images': [],
-           'samplers': [{'magFilter': 9728, 'minFilter': 9728, 'wrapS': 33071, 'wrapT': 33071}]}
+           'samplers': [{'magFilter': 9728, 'minFilter': 9728}]}
     binary = bytearray()
 
     def accessor(values, kind):
