@@ -18,7 +18,7 @@ import traceback
 CACHE = None          # Arbeitsordner der App (filesDir/viewer)
 NATIVE_DIR = None     # nativeLibraryDir (enthält libdw2conv.so)
 _lock = threading.RLock()
-CONVERTER_VERSION = 'v2'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
+CONVERTER_VERSION = 'v3'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
 
 
 class State:
@@ -439,21 +439,30 @@ def prepare_model(identifier):
 
 
 def _eye_frames(native, folder):
-    """Augenposen als vollständige Texturen (wie die Windows-Vorschau); None ohne Augen."""
-    from dw2studio.core.dw2_eyes import eye_layout, eye_animation_frames
-    from dw2studio.core.native_texture import NativeTexture
+    """Augenposen wie in der Windows-Vorschau, aber je Material/Palette als eigene Textur.
+
+    Rückgabe: {'frames': [[url je Material] je Pose], 'default': Index der Ruhepose} oder None.
+    """
+    from dw2studio.core.dw2_eyes import eye_layout
+    from dw2studio.core.native_gltf import _tim, texture_images
+    from dw2studio.core.native_model import NativeModel
     try:
-        if eye_layout(native) is None:
+        layout = eye_layout(native)
+        if layout is None or len(layout.sources) < 2:
             return None
-        names = sorted(folder.glob('eyes_*.png'))
-        if not names:
-            base = NativeTexture(native).to_image()
-            for i, frame in enumerate(eye_animation_frames(native, base)):
-                frame.convert('RGBA').save(folder / f'eyes_{i}.png')
-            names = sorted(folder.glob('eyes_*.png'))
-        if len(names) < 2:
-            return None
-        return {'frames': [p.relative_to(CACHE).as_posix() for p in names], 'default': len(names) - 1}
+        tx, ty, tw, th = layout.target
+        base, _ = _tim(native, NativeModel(native))
+        frames = []
+        for f, (sx, sy, w, h) in enumerate(layout.sources):
+            names = sorted(folder.glob(f'eyes_{f}_*.png'), key=lambda p: int(p.stem.rsplit('_', 1)[1]))
+            if not names:
+                indices = base.copy()
+                indices[ty:ty + th, tx:tx + tw] = base[sy:sy + h, sx:sx + w]
+                for i, image in enumerate(texture_images(native, indices)):
+                    image.save(folder / f'eyes_{f}_{i}.png')
+                names = sorted(folder.glob(f'eyes_{f}_*.png'), key=lambda p: int(p.stem.rsplit('_', 1)[1]))
+            frames.append([p.relative_to(CACHE).as_posix() for p in names])
+        return {'frames': frames, 'default': len(frames) - 1}
     except Exception:
         traceback.print_exc()
         return None

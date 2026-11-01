@@ -62,20 +62,23 @@ export class Viewer {
       });
     }
     this.model = null; this.mixer = null; this.actions = [];
-    this.eyes?.forEach(tex => tex.dispose());
+    this.eyes?.flat().forEach(tex => tex.dispose());
     this.eyes = null; this.eyeFrame = -1; this.baseMaps = null;
   }
 
-  /** Augenposen (vollständige Texturen) laden; Austausch wie in der Windows-Vorschau. */
-  async setEyes(urls) {
+  /** Augenposen laden: frames[pose][material] (je Palette eine Textur, Material-Name tex_<i>). */
+  async setEyes(frames) {
     const mine = this.token;
-    const textures = await Promise.all(urls.map(u => this.texLoader.loadAsync(u)));
-    if (mine !== this.token || !this.model) { textures.forEach(tex => tex.dispose()); return; }
-    textures.forEach(tex => { tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; this.filter(tex); });
+    const textures = await Promise.all(frames.map(list => Promise.all(list.map(u => this.texLoader.loadAsync(u)))));
+    if (mine !== this.token || !this.model) { textures.flat().forEach(tex => tex.dispose()); return; }
+    textures.flat().forEach(tex => { tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; this.filter(tex); });
     this.baseMaps = [];
     this.model.traverse(o => {
       if (!o.isMesh) return;
-      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) this.baseMaps.push([m, m.map]); });
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
+        const hit = /^tex_(\d+)$/.exec(m.name || '');
+        if (hit && m.map) this.baseMaps.push([m, Number(hit[1])]);
+      });
     });
     this.eyes = textures; this.eyeFrame = -1; this.blinkClock = 0;
   }
@@ -83,7 +86,10 @@ export class Viewer {
   showEye(frame) {
     if (frame === this.eyeFrame || !this.baseMaps) return;
     this.eyeFrame = frame;
-    for (const [m] of this.baseMaps) { m.map = this.eyes[frame]; m.needsUpdate = true; }
+    for (const [m, i] of this.baseMaps) {
+      const tex = this.eyes[frame][i];
+      if (tex) { m.map = tex; m.needsUpdate = true; }
+    }
   }
 
   filter(tex) {
@@ -137,7 +143,7 @@ export class Viewer {
         m.needsUpdate = true;
       });
     });
-    this.eyes?.forEach(tex => this.filter(tex));
+    this.eyes?.flat().forEach(tex => this.filter(tex));
   }
 
   setLight(v) { this.key.intensity = v; this.ambient.intensity = 0.4 + v * 0.4; }

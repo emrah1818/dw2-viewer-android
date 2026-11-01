@@ -175,7 +175,7 @@ async function loadModel(id) {
       ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('')
       : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
-    if (info.eyes) view.setEyes(info.eyes.frames.map(u => BASE + u)).catch(e => log('Augen: ' + e.message));
+    if (info.eyes) view.setEyes(info.eyes.frames.map(list => list.map(u => BASE + u))).catch(e => log('Augen: ' + e.message));
     log(`${info.name}: ${t('geladen')} (${info.seconds} s)`);
     prefetchNeighbours(id);
   } catch (e) {

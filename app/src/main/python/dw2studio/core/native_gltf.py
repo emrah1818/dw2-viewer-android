@@ -2,7 +2,9 @@
 
 Ersetzt auf Android die Windows-EXE (dw2_model_converter von jype, MIT).
 Formatlogik wie dort und wie RigProject.export_gltf dieses Projekts:
-NativeModel (Geometrie), NativeAnimation (Matrizen/Clips), NativeTexture (Paletten).
+NativeModel (Geometrie), NativeAnimation (Matrizen/Clips).
+Texturen wie auf der PS1: je benutzter Palette (CLUT) eine eigene Textur, jede
+Fläche nutzt genau ihre Palette – keine geschätzte Palettenkarte, keine Löcher.
 Ausgabe: <Ziel>/M<ID><CODE>.gltf mit eingebetteten Puffern und PNG.
 """
 from pathlib import Path
@@ -15,7 +17,6 @@ import struct
 import numpy as np
 
 from .native_model import NativeModel
-from .native_texture import NativeTexture
 from .rig_animation import D, NativeAnimation, parents_from_depths
 
 MODEL = re.compile(r'^M(\d{3}[A-Z0-9]{4})\.BIN$', re.I)
@@ -61,6 +62,48 @@ def _trs(matrix):
     return matrix[:3, 3].tolist(), (q / np.linalg.norm(q)).tolist(), scale.tolist()
 
 
+def _tim(native, model):
+    t = model.tim_start
+    if t + 0x4040 > len(native) or struct.unpack_from('<II', native, t) != (16, 8) \
+            or struct.unpack_from('<I', native, t + 52)[0] != 16396 or struct.unpack_from('<HH', native, t + 60) != (32, 256):
+        raise ValueError('Nicht unterstützte DW2-TIM-Struktur (erwartet 128×256, 4 Bit).')
+    raw = np.frombuffer(native, dtype=np.uint8, count=0x4040 - 2048 - 64, offset=t + 64)
+    indices = np.empty(raw.size * 2, dtype=np.uint8)
+    indices[0::2] = raw & 15
+    indices[1::2] = raw >> 4
+    words = np.frombuffer(native, dtype='<u2', count=1024, offset=t + 0x4040 - 2048)
+    return indices.reshape(224, 128), words
+
+
+def material_keys(model):
+    """Alle (halbtransparent, CLUT)-Kombinationen in fester Reihenfolge."""
+    return sorted({(bool(stp), clut) for part in model.parts for *_, clut, stp in part.primitives},
+                  key=lambda k: (k[0], k[1]))
+
+
+def texture_images(native, indices=None):
+    """Je Material eine 128×256-RGBA-Textur, dekodiert mit genau dessen Palette."""
+    from PIL import Image
+    model = NativeModel(native)
+    base, words = _tim(native, model)
+    indices = base if indices is None else indices
+    images = []
+    for stp, clut in material_keys(model):
+        x, y = (clut & 63) * 16, (clut >> 6) & 1023
+        if x not in (0, 16) or not 224 <= y < 256:
+            raise ValueError(f'Unbekannte DW2-CLUT 0x{clut:04X}.')
+        bank = (y - 224) * 32 + (clut & 63) * 16
+        w = words[bank + indices.astype(np.int32)].astype(np.uint32)
+        rgba = np.zeros((256, 128, 4), dtype=np.uint8)
+        r, g, b = (((w >> sh) & 31) * 8 for sh in (0, 5, 10))
+        black = (r | g | b) == 0
+        flag = (w & 0x8000) != 0
+        alpha = np.where(black, np.where(flag, 255, 0), np.where(flag & stp, 127, 255))
+        rgba[:224, :, 0], rgba[:224, :, 1], rgba[:224, :, 2], rgba[:224, :, 3] = r, g, b, alpha
+        images.append(Image.fromarray(rgba, 'RGBA'))
+    return images
+
+
 def convert_model(native, animations, target):
     """native: Bytes der M-BIN; animations: {Präfix 'A'..'K': Bytes}; target: .gltf-Pfad."""
     native = bytes(native)
@@ -78,12 +121,7 @@ def convert_model(native, animations, target):
     doc = {'asset': {'version': '2.0', 'generator': 'DW2 3D Viewer Android (jype-Format)'}, 'scene': 0,
            'scenes': [{'nodes': [], 'extras': {'blinking_data': list(native[model.blink_offset:model.blink_offset + 24])}}],
            'nodes': [], 'meshes': [], 'animations': [], 'buffers': [], 'bufferViews': [], 'accessors': [],
-           'materials': [
-               {'name': 'opaque', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': 0., 'roughnessFactor': 1.},
-                'alphaMode': 'MASK', 'alphaCutoff': .1, 'doubleSided': True},
-               {'name': 'semi_transparent', 'pbrMetallicRoughness': {'baseColorTexture': {'index': 0}, 'metallicFactor': 0., 'roughnessFactor': 1.},
-                'alphaMode': 'BLEND', 'doubleSided': True}],
-           'textures': [{'sampler': 0, 'source': 0}],
+           'materials': [], 'textures': [], 'images': [],
            'samplers': [{'magFilter': 9728, 'minFilter': 9728, 'wrapS': 33071, 'wrapT': 33071}]}
     binary = bytearray()
 
@@ -109,23 +147,34 @@ def convert_model(native, animations, target):
     for i, parent in enumerate(parents):
         (doc['scenes'][0]['nodes'] if parent < 0 else doc['nodes'][parent]['children']).append(i)
 
+    keys = material_keys(model)
+    for i, (stp, clut) in enumerate(keys):
+        doc['materials'].append({'name': f'tex_{i}', 'doubleSided': True,
+                                 'pbrMetallicRoughness': {'baseColorTexture': {'index': i}, 'metallicFactor': 0., 'roughnessFactor': 1.},
+                                 **({'alphaMode': 'BLEND'} if stp else {'alphaMode': 'MASK', 'alphaCutoff': .1}),
+                                 'extras': {'clut': clut, 'semi_transparent': stp}})
+        doc['textures'].append({'sampler': 0, 'source': i})
+    for i, image in enumerate(texture_images(native)):
+        png = io.BytesIO()
+        image.save(png, format='PNG')
+        doc['images'].append({'name': f'texture_{i}', 'uri': 'data:image/png;base64,' + base64.b64encode(png.getvalue()).decode()})
+    material = {k: i for i, k in enumerate(keys)}
+
     for bone, part in enumerate(model.parts):
         vertices = np.array([struct.unpack_from('<hhh', native, part.vertices + 6 + i * 6) for i in range(part.vertex_count)], dtype=float) @ D
         normals = np.array([struct.unpack_from('<hhh', native, part.normals + 6 + i * 6) for i in range(part.normal_count)], dtype=float) @ D / 4096
-        groups = {False: ([], [], []), True: ([], [], [])}
+        groups = {}
         for vs, normal_ids, uv, clut, stp in part.primitives:
-            points, ns, uvs = groups[stp]
+            points, ns, uvs = groups.setdefault(material[(bool(stp), clut)], ([], [], []))
             for order in ((2, 1, 0), (1, 2, 3)) if len(vs) == 4 else ((2, 1, 0),):
                 for j in order:
                     points.append(vertices[vs[j]])
                     ns.append(normals[normal_ids[j]])
-                    uvs.append((uv[j][0] / 128, uv[j][1] / 256))
+                    uvs.append((uv[j][0] / 128 + .0001, uv[j][1] / 256 + .0001))
         primitives = []
-        for stp in (False, True):
-            points, ns, uvs = groups[stp]
-            if points:
-                primitives.append({'attributes': {'POSITION': accessor(points, 'VEC3'), 'NORMAL': accessor(ns, 'VEC3'),
-                                                  'TEXCOORD_0': accessor(uvs, 'VEC2')}, 'material': int(stp), 'mode': 4})
+        for mat, (points, ns, uvs) in sorted(groups.items()):
+            primitives.append({'attributes': {'POSITION': accessor(points, 'VEC3'), 'NORMAL': accessor(ns, 'VEC3'),
+                                              'TEXCOORD_0': accessor(uvs, 'VEC2')}, 'material': mat, 'mode': 4})
         doc['meshes'].append({'name': f'mesh_{bone}', 'primitives': primitives})
         doc['nodes'].append({'name': f'mesh_{bone}', 'mesh': len(doc['meshes']) - 1})
         doc['nodes'][bone]['children'].append(len(doc['nodes']) - 1)
@@ -155,9 +204,6 @@ def convert_model(native, animations, target):
                     a['channels'].append({'sampler': len(a['samplers']) - 1, 'target': {'node': bone, 'path': channel}})
             doc['animations'].append(a)
 
-    png = io.BytesIO()
-    NativeTexture(native).to_image().save(png, format='PNG')
-    doc['images'] = [{'name': 'texture', 'uri': 'data:image/png;base64,' + base64.b64encode(png.getvalue()).decode()}]
     doc['buffers'] = [{'byteLength': len(binary), 'uri': 'data:application/octet-stream;base64,' + base64.b64encode(binary).decode()}]
     target = Path(target)
     target.write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
