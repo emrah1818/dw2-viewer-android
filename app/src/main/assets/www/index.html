@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>DW2 3D Viewer</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/examples/jsm/" } }
+</script>
+</head>
+<body>
+<header id="top">
+  <img src="logo.png" alt="" width="34" height="34">
+  <div id="title"><b>DW2 · 3D VIEWER</b><span id="subtitle"></span></div>
+  <button id="btn-open" class="primary small" data-i18n="BIN / ISO öffnen">BIN / ISO öffnen</button>
+</header>
+
+<main>
+  <section id="start" class="page active">
+    <div class="card center">
+      <img src="logo.png" alt="" width="96" height="96">
+      <h2>Digimon World 2 · 3D Viewer Studio</h2>
+      <p data-i18n="start_text">Öffne dein eigenes Spiel-Image (BIN/ISO). Die App enthält keine Spieldaten.</p>
+      <button id="btn-open2" class="primary big" data-i18n="BIN / ISO öffnen">BIN / ISO öffnen</button>
+      <p class="hint" id="space-hint"></p>
+    </div>
+  </section>
+
+  <section id="page-list" class="page">
+    <input id="search" type="search" placeholder="Digimon suchen …" data-i18n-ph="Digimon suchen …">
+    <div id="list"></div>
+  </section>
+
+  <section id="page-view" class="page">
+    <div id="stage"><canvas id="gl"></canvas><div id="stage-msg"></div></div>
+    <div id="viewbar">
+      <button id="v-prev" aria-label="Zurück">◀</button>
+      <div id="v-name">–</div>
+      <button id="v-next" aria-label="Weiter">▶</button>
+    </div>
+    <div id="animbar">
+      <select id="anim"></select>
+      <button id="play">⏸</button>
+      <input id="speed" type="range" min="0.1" max="2" step="0.1" value="1">
+      <button id="reset">⌖</button>
+    </div>
+    <details class="card" id="view-settings">
+      <summary data-i18n="Ansicht">Ansicht</summary>
+      <label class="row"><input type="checkbox" id="o-grid" checked> <span data-i18n="Boden-Raster">Boden-Raster</span></label>
+      <label class="row"><input type="checkbox" id="o-wire"> <span data-i18n="Drahtgitter">Drahtgitter</span></label>
+      <label class="row"><input type="checkbox" id="o-nearest" checked> <span data-i18n="Pixel-Look (PS1)">Pixel-Look (PS1)</span></label>
+      <label class="row"><input type="checkbox" id="o-prefetch" checked> <span data-i18n="Nachbarmodelle vorbereiten">Nachbarmodelle vorbereiten</span></label>
+      <label class="row"><span data-i18n="Licht">Licht</span> <input type="range" id="o-light" min="0.2" max="3" step="0.1" value="1.2"></label>
+      <label class="row"><span data-i18n="Hintergrund">Hintergrund</span> <input type="color" id="o-bg" value="#16243a"></label>
+      <div class="btns">
+        <button id="b-tex" data-i18n="Textur als PNG exportieren">Textur als PNG exportieren</button>
+        <button id="b-glb" data-i18n="Modell als GLB exportieren">Modell als GLB exportieren</button>
+      </div>
+    </details>
+  </section>
+
+  <section id="page-edit" class="page">
+    <div id="edit-head" class="card"><b id="edit-name">–</b><span id="edit-sub"></span></div>
+    <details class="card" open><summary data-i18n="Name">Name</summary><div id="f-name"></div></details>
+    <details class="card"><summary data-i18n="Typ & Specialty">Typ & Specialty</summary><div id="f-type"></div></details>
+    <details class="card"><summary data-i18n="Attacken">Attacken</summary><div id="f-attacks"></div></details>
+    <details class="card"><summary data-i18n="Gegnerwerte & EXP">Gegnerwerte & EXP</summary><div id="f-enemy"></div></details>
+    <details class="card"><summary data-i18n="Spielstand / Memorycard">Spielstand / Memorycard</summary><div id="f-roster"></div></details>
+  </section>
+
+  <section id="page-changes" class="page">
+    <div class="card">
+      <b id="pending-count">0</b>
+      <div id="pending-list"></div>
+      <div class="btns">
+        <button id="b-saveimg" class="primary" data-i18n="Neues Image exportieren">Neues Image exportieren</button>
+        <button id="b-saveproj" data-i18n="Mod-Projekt speichern">Mod-Projekt speichern</button>
+        <button id="b-loadproj" data-i18n="Mod-Projekt laden">Mod-Projekt laden</button>
+        <button id="b-saveroster" data-i18n="Spielstand/Memorycard exportieren">Spielstand/Memorycard exportieren</button>
+      </div>
+      <p class="hint" data-i18n="changes_note">Das Original-Image bleibt unverändert. Es wird immer eine neue, geprüfte Datei erzeugt.</p>
+    </div>
+  </section>
+
+  <section id="page-more" class="page">
+    <div class="card">
+      <label class="row"><span data-i18n="Sprache">Sprache</span>
+        <select id="lang"><option value="de">Deutsch</option><option value="en">English</option></select></label>
+      <div class="btns"><button id="b-clear" data-i18n="Zwischenspeicher leeren">Zwischenspeicher leeren</button></div>
+      <p class="hint" id="about"></p>
+    </div>
+    <div class="card"><b data-i18n="Protokoll">Protokoll</b><pre id="log"></pre></div>
+  </section>
+</main>
+
+<nav id="tabs">
+  <button data-page="page-list" class="tab">☰<span data-i18n="Digimon">Digimon</span></button>
+  <button data-page="page-view" class="tab">◈<span>3D</span></button>
+  <button data-page="page-edit" class="tab">✎<span data-i18n="Bearbeiten">Bearbeiten</span></button>
+  <button data-page="page-changes" class="tab">✔<span data-i18n="Änderungen">Änderungen</span><i id="badge" hidden>0</i></button>
+  <button data-page="page-more" class="tab">⋯<span data-i18n="Mehr">Mehr</span></button>
+</nav>
+
+<div id="overlay" hidden><div class="spin"></div><div id="ov-text"></div><div id="ov-bar"><i></i></div></div>
+<div id="toast" hidden></div>
+<div id="modal" hidden><div id="modal-box"></div></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

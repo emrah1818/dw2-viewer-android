@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.DW2" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/dw2_bg</item>
+    </style>
+    <color name="dw2_bg">#0F1929</color>
+</resources>

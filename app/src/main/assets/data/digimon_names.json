@@ -1,0 +1,798 @@
+[
+  {
+    "id": 3,
+    "name": "Agumon"
+  },
+  {
+    "id": 4,
+    "name": "Betamon"
+  },
+  {
+    "id": 5,
+    "name": "Greymon"
+  },
+  {
+    "id": 6,
+    "name": "Devimon"
+  },
+  {
+    "id": 7,
+    "name": "Airdramon"
+  },
+  {
+    "id": 8,
+    "name": "Tyrannomon"
+  },
+  {
+    "id": 9,
+    "name": "Meramon"
+  },
+  {
+    "id": 10,
+    "name": "Seadramon"
+  },
+  {
+    "id": 11,
+    "name": "Numemon"
+  },
+  {
+    "id": 12,
+    "name": "MetalGreymon"
+  },
+  {
+    "id": 13,
+    "name": "Mamemon"
+  },
+  {
+    "id": 14,
+    "name": "Monzaemon"
+  },
+  {
+    "id": 17,
+    "name": "Gabumon"
+  },
+  {
+    "id": 18,
+    "name": "Elecmon"
+  },
+  {
+    "id": 19,
+    "name": "Kabuterimon"
+  },
+  {
+    "id": 20,
+    "name": "Angemon"
+  },
+  {
+    "id": 21,
+    "name": "Birdramon"
+  },
+  {
+    "id": 22,
+    "name": "Garurumon"
+  },
+  {
+    "id": 23,
+    "name": "Frigimon"
+  },
+  {
+    "id": 24,
+    "name": "Whamon"
+  },
+  {
+    "id": 25,
+    "name": "Vegiemon"
+  },
+  {
+    "id": 26,
+    "name": "SkullGreymon"
+  },
+  {
+    "id": 27,
+    "name": "MetalMamemon"
+  },
+  {
+    "id": 28,
+    "name": "Vademon"
+  },
+  {
+    "id": 31,
+    "name": "Patamon"
+  },
+  {
+    "id": 32,
+    "name": "Kunemon"
+  },
+  {
+    "id": 33,
+    "name": "Unimon"
+  },
+  {
+    "id": 34,
+    "name": "Ogremon"
+  },
+  {
+    "id": 35,
+    "name": "Shellmon"
+  },
+  {
+    "id": 36,
+    "name": "Centaurmon"
+  },
+  {
+    "id": 37,
+    "name": "Bakemon"
+  },
+  {
+    "id": 38,
+    "name": "Drimogemon"
+  },
+  {
+    "id": 39,
+    "name": "Sukamon"
+  },
+  {
+    "id": 40,
+    "name": "Andromon"
+  },
+  {
+    "id": 41,
+    "name": "Giromon"
+  },
+  {
+    "id": 42,
+    "name": "Etemon"
+  },
+  {
+    "id": 45,
+    "name": "Biyomon"
+  },
+  {
+    "id": 46,
+    "name": "Palmon"
+  },
+  {
+    "id": 47,
+    "name": "Monochromon"
+  },
+  {
+    "id": 48,
+    "name": "Leomon"
+  },
+  {
+    "id": 49,
+    "name": "Coelamon"
+  },
+  {
+    "id": 50,
+    "name": "Kokatorimon"
+  },
+  {
+    "id": 51,
+    "name": "Kuwagamon"
+  },
+  {
+    "id": 52,
+    "name": "Mojyamon"
+  },
+  {
+    "id": 53,
+    "name": "Nanimon"
+  },
+  {
+    "id": 54,
+    "name": "Megadramon"
+  },
+  {
+    "id": 55,
+    "name": "Piximon"
+  },
+  {
+    "id": 56,
+    "name": "Digitamamon"
+  },
+  {
+    "id": 57,
+    "name": "Pengiumon"
+  },
+  {
+    "id": 58,
+    "name": "Ninjamon"
+  },
+  {
+    "id": 59,
+    "name": "Phoenixmon"
+  },
+  {
+    "id": 60,
+    "name": "H-Kabuterimon"
+  },
+  {
+    "id": 61,
+    "name": "Megaseadramon"
+  },
+  {
+    "id": 63,
+    "name": "Panjyamon"
+  },
+  {
+    "id": 64,
+    "name": "Gigadramon"
+  },
+  {
+    "id": 65,
+    "name": "MetalEtemon"
+  },
+  {
+    "id": 66,
+    "name": "Myotismon"
+  },
+  {
+    "id": 67,
+    "name": "Yanmamon"
+  },
+  {
+    "id": 68,
+    "name": "Gotsumon"
+  },
+  {
+    "id": 69,
+    "name": "Flarerizamon"
+  },
+  {
+    "id": 70,
+    "name": "WaruMonzaemon"
+  },
+  {
+    "id": 71,
+    "name": "SnowAgumon"
+  },
+  {
+    "id": 72,
+    "name": "Hyogamon"
+  },
+  {
+    "id": 73,
+    "name": "P-Sukamon"
+  },
+  {
+    "id": 74,
+    "name": "Dokunemon"
+  },
+  {
+    "id": 75,
+    "name": "ShimaUnimon"
+  },
+  {
+    "id": 76,
+    "name": "Tankmon"
+  },
+  {
+    "id": 78,
+    "name": "J-Mojyamon"
+  },
+  {
+    "id": 79,
+    "name": "N-Drimogemon"
+  },
+  {
+    "id": 80,
+    "name": "Goburimon"
+  },
+  {
+    "id": 81,
+    "name": "Mudfrigimon"
+  },
+  {
+    "id": 82,
+    "name": "Psychemon"
+  },
+  {
+    "id": 83,
+    "name": "ModokiBetamon"
+  },
+  {
+    "id": 84,
+    "name": "ToyAgumon"
+  },
+  {
+    "id": 85,
+    "name": "Piddomon"
+  },
+  {
+    "id": 86,
+    "name": "Aruraumon"
+  },
+  {
+    "id": 87,
+    "name": "Geremon"
+  },
+  {
+    "id": 88,
+    "name": "Vermilimon"
+  },
+  {
+    "id": 89,
+    "name": "Fugamon"
+  },
+  {
+    "id": 90,
+    "name": "Tekkamon"
+  },
+  {
+    "id": 91,
+    "name": "MoriShellmon"
+  },
+  {
+    "id": 92,
+    "name": "Guardromon"
+  },
+  {
+    "id": 93,
+    "name": "Muchomon"
+  },
+  {
+    "id": 94,
+    "name": "Icemon"
+  },
+  {
+    "id": 95,
+    "name": "Akatorimon"
+  },
+  {
+    "id": 96,
+    "name": "Tsukaimon"
+  },
+  {
+    "id": 97,
+    "name": "Sharmamon"
+  },
+  {
+    "id": 98,
+    "name": "ClearAgumon"
+  },
+  {
+    "id": 99,
+    "name": "Zassomon"
+  },
+  {
+    "id": 100,
+    "name": "IceDevimon"
+  },
+  {
+    "id": 101,
+    "name": "Darkrizamon"
+  },
+  {
+    "id": 102,
+    "name": "SandYanmamon"
+  },
+  {
+    "id": 103,
+    "name": "SnowGoburimon"
+  },
+  {
+    "id": 105,
+    "name": "BlueMeramon"
+  },
+  {
+    "id": 106,
+    "name": "Gururumon"
+  },
+  {
+    "id": 107,
+    "name": "Soulmon"
+  },
+  {
+    "id": 109,
+    "name": "Otamamon"
+  },
+  {
+    "id": 110,
+    "name": "Gekomon"
+  },
+  {
+    "id": 111,
+    "name": "Tentomon"
+  },
+  {
+    "id": 112,
+    "name": "WaruSeadramon"
+  },
+  {
+    "id": 113,
+    "name": "Meteormon"
+  },
+  {
+    "id": 115,
+    "name": "Machinedramon"
+  },
+  {
+    "id": 117,
+    "name": "Jijimon"
+  },
+  {
+    "id": 119,
+    "name": "ShogunGekomon"
+  },
+  {
+    "id": 121,
+    "name": "Cherrymon"
+  },
+  {
+    "id": 122,
+    "name": "Hagurumon"
+  },
+  {
+    "id": 123,
+    "name": "Tinmon"
+  },
+  {
+    "id": 124,
+    "name": "Master Tyrannomon"
+  },
+  {
+    "id": 128,
+    "name": "Veedramon"
+  },
+  {
+    "id": 131,
+    "name": "Gazimon"
+  },
+  {
+    "id": 132,
+    "name": "Gizamon"
+  },
+  {
+    "id": 133,
+    "name": "Dark Tyrannomon"
+  },
+  {
+    "id": 134,
+    "name": "Cyclonemon"
+  },
+  {
+    "id": 135,
+    "name": "Devidramon"
+  },
+  {
+    "id": 136,
+    "name": "Tuskmon"
+  },
+  {
+    "id": 137,
+    "name": "Flymon"
+  },
+  {
+    "id": 138,
+    "name": "Deltamon"
+  },
+  {
+    "id": 139,
+    "name": "Raremon"
+  },
+  {
+    "id": 140,
+    "name": "Metal Tyrannomon"
+  },
+  {
+    "id": 142,
+    "name": "ExTyrannomon"
+  },
+  {
+    "id": 143,
+    "name": "Clockmon"
+  },
+  {
+    "id": 144,
+    "name": "Rosemon"
+  },
+  {
+    "id": 145,
+    "name": "Veemon"
+  },
+  {
+    "id": 146,
+    "name": "Flamedramon"
+  },
+  {
+    "id": 147,
+    "name": "Raidramon"
+  },
+  {
+    "id": 148,
+    "name": "Imperialdramon"
+  },
+  {
+    "id": 149,
+    "name": "Baihumon"
+  },
+  {
+    "id": 150,
+    "name": "Omnimon"
+  },
+  {
+    "id": 151,
+    "name": "Diaboromon"
+  },
+  {
+    "id": 180,
+    "name": "AeroVeedramon"
+  },
+  {
+    "id": 181,
+    "name": "M-Kabuterimon"
+  },
+  {
+    "id": 182,
+    "name": "Gomamon"
+  },
+  {
+    "id": 183,
+    "name": "WereGarurumon"
+  },
+  {
+    "id": 184,
+    "name": "Togemon"
+  },
+  {
+    "id": 185,
+    "name": "Zudomon"
+  },
+  {
+    "id": 186,
+    "name": "Lillymon"
+  },
+  {
+    "id": 187,
+    "name": "Garudamon"
+  },
+  {
+    "id": 188,
+    "name": "Candlemon"
+  },
+  {
+    "id": 189,
+    "name": "SkullMeramon"
+  },
+  {
+    "id": 190,
+    "name": "Boltmon"
+  },
+  {
+    "id": 191,
+    "name": "Floramon"
+  },
+  {
+    "id": 192,
+    "name": "Deramon"
+  },
+  {
+    "id": 193,
+    "name": "Gryphomon"
+  },
+  {
+    "id": 194,
+    "name": "Wizardmon"
+  },
+  {
+    "id": 195,
+    "name": "P-Mamemon"
+  },
+  {
+    "id": 196,
+    "name": "M-Garurumon"
+  },
+  {
+    "id": 197,
+    "name": "Crabmon"
+  },
+  {
+    "id": 198,
+    "name": "Kiwimon"
+  },
+  {
+    "id": 199,
+    "name": "Starmon"
+  },
+  {
+    "id": 200,
+    "name": "Blossomon"
+  },
+  {
+    "id": 201,
+    "name": "Pumpkinmon"
+  },
+  {
+    "id": 202,
+    "name": "Scorpiomon"
+  },
+  {
+    "id": 203,
+    "name": "Triceramon"
+  },
+  {
+    "id": 204,
+    "name": "M-Seadramon"
+  },
+  {
+    "id": 205,
+    "name": "SaberLeomon"
+  },
+  {
+    "id": 206,
+    "name": "Tapirmon"
+  },
+  {
+    "id": 207,
+    "name": "Apemon"
+  },
+  {
+    "id": 208,
+    "name": "Tortomon"
+  },
+  {
+    "id": 209,
+    "name": "Ikkakumon"
+  },
+  {
+    "id": 210,
+    "name": "Dolphmon"
+  },
+  {
+    "id": 211,
+    "name": "MagnaAngemon"
+  },
+  {
+    "id": 212,
+    "name": "Mammothmon"
+  },
+  {
+    "id": 213,
+    "name": "Wargreymon"
+  },
+  {
+    "id": 214,
+    "name": "Seraphimon"
+  },
+  {
+    "id": 215,
+    "name": "SkullMammothmon"
+  },
+  {
+    "id": 216,
+    "name": "MarineAngemon"
+  },
+  {
+    "id": 217,
+    "name": "DemiDevimon"
+  },
+  {
+    "id": 218,
+    "name": "Syakomon"
+  },
+  {
+    "id": 219,
+    "name": "Mushroomon"
+  },
+  {
+    "id": 220,
+    "name": "Gesomon"
+  },
+  {
+    "id": 221,
+    "name": "Octomon"
+  },
+  {
+    "id": 222,
+    "name": "Woodmon"
+  },
+  {
+    "id": 223,
+    "name": "Phantomon"
+  },
+  {
+    "id": 224,
+    "name": "MarineDevimon"
+  },
+  {
+    "id": 225,
+    "name": "Dragomon"
+  },
+  {
+    "id": 226,
+    "name": "Okuwamon"
+  },
+  {
+    "id": 227,
+    "name": "Garbagemon"
+  },
+  {
+    "id": 228,
+    "name": "Piedmon"
+  },
+  {
+    "id": 229,
+    "name": "Pukumon"
+  },
+  {
+    "id": 230,
+    "name": "GranKuwagamon"
+  },
+  {
+    "id": 231,
+    "name": "Puppetmon"
+  },
+  {
+    "id": 232,
+    "name": "Preciomon"
+  },
+  {
+    "id": 233,
+    "name": "Gatamon"
+  },
+  {
+    "id": 234,
+    "name": "Angewomon"
+  },
+  {
+    "id": 235,
+    "name": "Magnadramon"
+  },
+  {
+    "id": 236,
+    "name": "VenomMyostismon"
+  },
+  {
+    "id": 237,
+    "name": "Kimeramon"
+  },
+  {
+    "id": 244,
+    "name": "Chaos Piedmon (Boss)"
+  },
+  {
+    "id": 245,
+    "name": "Chaos Seadramon (Boss)"
+  },
+  {
+    "id": 246,
+    "name": "Chaos Wargreymon (Boss)"
+  },
+  {
+    "id": 247,
+    "name": "NeoCrimson (Boss)"
+  },
+  {
+    "id": 248,
+    "name": "ChaosLord (Boss)"
+  },
+  {
+    "id": 249,
+    "name": "? (Virus Guardian) (Boss)"
+  },
+  {
+    "id": 250,
+    "name": "? (Data Guardian) (Boss)"
+  },
+  {
+    "id": 251,
+    "name": "? (Vaccine Guardian) (Boss)"
+  },
+  {
+    "id": 252,
+    "name": "? (GAIA Arm)"
+  },
+  {
+    "id": 253,
+    "name": "? (GAIA Arm)"
+  },
+  {
+    "id": 254,
+    "name": "? (GAIA Form 1) (Final Boss)"
+  },
+  {
+    "id": 255,
+    "name": "? (GAIA Form 2) (Final Boss)"
+  }
+]
