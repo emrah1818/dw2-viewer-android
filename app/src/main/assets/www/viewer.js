@@ -138,6 +138,9 @@ export class Viewer {
       if (!o.isMesh) return;
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
         m.side = THREE.DoubleSide;
+        // Halbtransparente PS1-Flächen: Tiefe schreiben, damit die Reihenfolge
+        // beim Animieren nicht springt (sonst Flackern).
+        if (m.transparent) { m.depthWrite = true; m.alphaTest = Math.max(m.alphaTest || 0, 0.02); }
         m.wireframe = this.wire;
         if (m.map) this.filter(m.map);
         m.needsUpdate = true;

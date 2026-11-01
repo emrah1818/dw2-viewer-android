@@ -11,6 +11,7 @@ import json
 import os
 import re
 import shutil
+import struct
 import threading
 import time
 import traceback
@@ -18,7 +19,7 @@ import traceback
 CACHE = None          # Arbeitsordner der App (filesDir/viewer)
 NATIVE_DIR = None     # nativeLibraryDir (enthält libdw2conv.so)
 _lock = threading.RLock()
-CONVERTER_VERSION = 'v4'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
+CONVERTER_VERSION = 'v5'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
 
 
 class State:
@@ -438,6 +439,36 @@ def prepare_model(identifier):
             'animations': animations, 'eyes': eyes, 'seconds': round(time.perf_counter() - started, 2)}
 
 
+def _display_eye_layout(native):
+    """Nur für die Anzeige: Blinzeldaten direkt lesen (wie der Konverter sie ablegt).
+
+    Der Desktop-Kern verlangt zusätzlich Schreibsicherheit; für die Vorschau genügt,
+    dass alle Rechtecke im Pixelbereich liegen.
+    """
+    from types import SimpleNamespace
+    tim, _, n = struct.unpack_from('<III', native)
+    start = 12 + 16 * n
+    meta = native[start:start + 24]
+    if len(meta) < 24 or meta[0] in (0xFE, 0xFF):
+        return None
+    x, y, w, h = meta[0] * 4, meta[1], meta[2] * 4, meta[3]
+    if not (w and h and x + w <= 128 and y + h <= 256):
+        return None
+    target, sources = (x, y, w, h), []
+    for i in range(4, 20, 2):
+        sx, sy = meta[i], meta[i + 1]
+        if (sx, sy) == (255, 255):
+            break
+        rect = (sx * 4, sy, w, h)
+        if rect[0] + w > 128 or rect[1] + h > 256:
+            return None
+        if rect != target and rect not in sources:
+            sources.append(rect)
+    if not sources:
+        return None
+    return SimpleNamespace(sources=tuple(sources) + (target,), target=target)
+
+
 def _eye_frames(native, folder):
     """Augenposen wie in der Windows-Vorschau, aber je Material/Palette als eigene Textur.
 
@@ -447,7 +478,7 @@ def _eye_frames(native, folder):
     from dw2studio.core.native_gltf import _tim, texture_images
     from dw2studio.core.native_model import NativeModel
     try:
-        layout = eye_layout(native)
+        layout = eye_layout(native) or _display_eye_layout(native)
         if layout is None or len(layout.sources) < 2:
             return None
         tx, ty, tw, th = layout.target

@@ -17,24 +17,68 @@ import struct
 import numpy as np
 
 from .native_model import NativeModel
-from .rig_animation import D, NativeAnimation, parents_from_depths
+from .rig_animation import D, parents_from_depths
 
 MODEL = re.compile(r'^M(\d{3}[A-Z0-9]{4})\.BIN$', re.I)
 
 
-def _native(matrix):
-    """PS1-Matrix wie im Original-Konverter anwenden (v' = M·v).
+class Clip:
+    def __init__(self, indices, termination, loop):
+        self.indices, self.termination, self.loop = indices, termination, loop
 
-    NativeAnimation liefert für den Rig-Editor die transponierte Rotation;
-    für die Anzeige wird sie zurückgedreht, sonst verdrehen sich Gliedmaßen.
+
+class Animation:
+    """A–K-Animation, gelesen exakt wie dw2_anim.cpp des Original-Konverters (tolerant).
+
+    transforms[bone][key] ist bereits die glTF-Matrix (D·M·D, D·t), M zeilenweise wie auf der PS1.
     """
-    m = np.array(matrix, dtype=float)
-    m[:3, :3] = m[:3, :3].T
-    return m
+    def __init__(self, data, bones):
+        data = bytes(data)
+        u32 = lambda o: struct.unpack_from('<I', data, o)[0] if 0 <= o and o + 4 <= len(data) else 1
+        if len(data) < 4 + 4 * bones + 4:
+            raise ValueError('Animationsdatei zu kurz.')
+        offsets = [u32(4 + 4 * i) for i in range(bones)]
+        pos = 4 + 4 * bones
+        offset = u32(pos); pos += 4
+        while offset == 0 and pos + 4 <= len(data):  # Auffüllung überspringen
+            offset = u32(pos); pos += 4
+        frame_offsets = []
+        while offset not in (0, 1) and len(frame_offsets) < 4096:
+            frame_offsets.append(offset)
+            offset = u32(pos); pos += 4
+        self.clips = []
+        for begin in frame_offsets:
+            cursor, rows = begin, []
+            while cursor < len(data) and data[cursor] not in (0xFE, 0xFF):
+                rows.append(tuple(data[cursor:cursor + bones]))
+                cursor += bones
+                if len(rows) > 100000:
+                    break
+            if cursor + 3 > len(data) or not rows or any(len(r) != bones for r in rows):
+                continue  # unvollständigen Clip auslassen, Rest weiter nutzen
+            self.clips.append(Clip(tuple(rows), data[cursor], struct.unpack_from('<H', data, cursor + 1)[0]))
+        if not self.clips:
+            raise ValueError('Keine lesbaren Animationsclips.')
+        self.transforms = []
+        for bone in range(bones):
+            count = max(row[bone] for clip in self.clips for row in clip.indices) + 1
+            keys = []
+            for key in range(count):
+                at = offsets[bone] + key * 24
+                m = np.eye(4)
+                if 0 <= at and at + 24 <= len(data):
+                    v = np.array(struct.unpack_from('<12h', data, at), dtype=float)
+                    m[:3, :3] = D @ (v[:9].reshape(3, 3) / 4096.) @ D
+                    m[:3, 3] = D @ v[9:12]
+                keys.append(m)
+            self.transforms.append(keys)
+
+    def local_pose(self, clip=0, frame=0):
+        row = self.clips[clip].indices[frame]
+        return [self.transforms[i][k] for i, k in enumerate(row)]
 
 
 def _trs(matrix):
-    matrix = _native(matrix)
     scale = np.linalg.norm(matrix[:3, :3], axis=0)
     if np.min(scale) < 1e-8:
         return matrix[:3, 3].tolist(), [0., 0., 0., 1.], [1., 1., 1.]
@@ -117,7 +161,7 @@ def convert_model(native, animations, target):
     clips = {}
     for prefix, data in sorted(animations.items()):
         try:
-            clips[prefix] = NativeAnimation(data, n)
+            clips[prefix] = Animation(data, n)
         except ValueError:
             continue  # defekte/fremde Animationsdatei überspringen, Modell trotzdem zeigen
 
