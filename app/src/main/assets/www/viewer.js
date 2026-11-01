@@ -25,6 +25,7 @@ export class Viewer {
     this.loader = new GLTFLoader();
     this.mixer = null; this.actions = []; this.model = null;
     this.playing = true; this.speed = 1; this.nearest = true; this.wire = false; this.token = 0;
+    this.eyes = null; this.blink = true; this.blinkClock = 0; this.eyeFrame = -1; this.texLoader = new THREE.TextureLoader();
     this.home = { pos: new THREE.Vector3(0, 0.5, 3), target: new THREE.Vector3(0, 0.4, 0) };
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
     this.resize();
@@ -42,6 +43,10 @@ export class Viewer {
   tick() {
     const dt = this.clock.getDelta();
     if (this.mixer && this.playing) this.mixer.update(dt * this.speed);
+    if (this.eyes) {
+      this.blinkClock += dt;
+      this.showEye(this.blink ? blinkFrame(this.blinkClock, this.eyes.length) : this.eyes.length - 1);
+    }
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -57,6 +62,34 @@ export class Viewer {
       });
     }
     this.model = null; this.mixer = null; this.actions = [];
+    this.eyes?.forEach(tex => tex.dispose());
+    this.eyes = null; this.eyeFrame = -1; this.baseMaps = null;
+  }
+
+  /** Augenposen (vollständige Texturen) laden; Austausch wie in der Windows-Vorschau. */
+  async setEyes(urls) {
+    const mine = this.token;
+    const textures = await Promise.all(urls.map(u => this.texLoader.loadAsync(u)));
+    if (mine !== this.token || !this.model) { textures.forEach(tex => tex.dispose()); return; }
+    textures.forEach(tex => { tex.flipY = false; tex.colorSpace = THREE.SRGBColorSpace; this.filter(tex); });
+    this.baseMaps = [];
+    this.model.traverse(o => {
+      if (!o.isMesh) return;
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { if (m.map) this.baseMaps.push([m, m.map]); });
+    });
+    this.eyes = textures; this.eyeFrame = -1; this.blinkClock = 0;
+  }
+
+  showEye(frame) {
+    if (frame === this.eyeFrame || !this.baseMaps) return;
+    this.eyeFrame = frame;
+    for (const [m] of this.baseMaps) { m.map = this.eyes[frame]; m.needsUpdate = true; }
+  }
+
+  filter(tex) {
+    tex.magFilter = this.nearest ? THREE.NearestFilter : THREE.LinearFilter;
+    tex.minFilter = this.nearest ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
+    tex.needsUpdate = true;
   }
 
   async load(url) {
@@ -100,16 +133,24 @@ export class Viewer {
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
         m.side = THREE.DoubleSide;
         m.wireframe = this.wire;
-        if (m.map) {
-          m.map.magFilter = this.nearest ? THREE.NearestFilter : THREE.LinearFilter;
-          m.map.minFilter = this.nearest ? THREE.NearestFilter : THREE.LinearMipmapLinearFilter;
-          m.map.needsUpdate = true;
-        }
+        if (m.map) this.filter(m.map);
         m.needsUpdate = true;
       });
     });
+    this.eyes?.forEach(tex => this.filter(tex));
   }
 
   setLight(v) { this.key.intensity = v; this.ambient.intensity = 0.4 + v * 0.4; }
   setBackground(hex) { this.scene.background = new THREE.Color(hex); }
+}
+
+/** Blinzel-Rhythmus der Windows-Vorschau (dw2_eyes.blink_frame_at); Originaltakt unbekannt. */
+export function blinkFrame(elapsed, count, period = 3.8) {
+  const open = count - 1, middle = Math.min(1, count - 2), closed = Math.min(2, count - 2);
+  const t = elapsed % period;
+  if (t < period - 0.27) return open;
+  if (t < period - 0.20) return middle;
+  if (t < period - 0.11) return closed;
+  if (t < period - 0.04) return middle;
+  return open;
 }

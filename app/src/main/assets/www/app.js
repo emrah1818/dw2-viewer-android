@@ -175,6 +175,7 @@ async function loadModel(id) {
       ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('')
       : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
+    if (info.eyes) view.setEyes(info.eyes.frames.map(u => BASE + u)).catch(e => log('Augen: ' + e.message));
     log(`${info.name}: ${t('geladen')} (${info.seconds} s)`);
     prefetchNeighbours(id);
   } catch (e) {
@@ -196,6 +197,7 @@ $('#anim').onchange = e => view.play(Number(e.target.value));
 $('#play').onclick = () => { view.playing = !view.playing; $('#play').textContent = view.playing ? '⏸' : '▶'; };
 $('#speed').oninput = e => { view.speed = Number(e.target.value); };
 $('#reset').onclick = () => view.resetCamera();
+$('#o-blink').onchange = e => { view.blink = e.target.checked; };
 $('#o-grid').onchange = e => { view.grid.visible = e.target.checked; };
 $('#o-wire').onchange = e => { view.wire = e.target.checked; view.applyMaterial(); };
 $('#o-nearest').onchange = e => { view.nearest = e.target.checked; view.applyMaterial(); };

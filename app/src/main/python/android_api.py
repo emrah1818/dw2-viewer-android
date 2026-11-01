@@ -18,6 +18,7 @@ import traceback
 CACHE = None          # Arbeitsordner der App (filesDir/viewer)
 NATIVE_DIR = None     # nativeLibraryDir (enthält libdw2conv.so)
 _lock = threading.RLock()
+CONVERTER_VERSION = 'v2'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
 
 
 class State:
@@ -414,7 +415,7 @@ def prepare_model(identifier):
         edit = s.edits.get((e.path, e.lba))
         if edit:
             overrides[Path(e.path.replace('\\', '/')).name] = edit.replacement
-    folder = CACHE / 'models' / S.index_key / key
+    folder = CACHE / 'models' / CONVERTER_VERSION / S.index_key / key
     if overrides:
         digest = hashlib.sha256()
         for name, data in sorted(overrides.items()):
@@ -431,8 +432,31 @@ def prepare_model(identifier):
         animations = model_animation_names(model)
     except Exception:
         animations = []
+    native = next((e for e in files if Path(e.path.replace('\\', '/')).name.upper().startswith('M')), None)
+    eyes = _eye_frames(s.current(native), model.parent) if native else None
     return {'url': model.relative_to(CACHE).as_posix(), 'name': c.name, 'id': c.id, 'code': c.code,
-            'animations': animations, 'seconds': round(time.perf_counter() - started, 2)}
+            'animations': animations, 'eyes': eyes, 'seconds': round(time.perf_counter() - started, 2)}
+
+
+def _eye_frames(native, folder):
+    """Augenposen als vollständige Texturen (wie die Windows-Vorschau); None ohne Augen."""
+    from dw2studio.core.dw2_eyes import eye_layout, eye_animation_frames
+    from dw2studio.core.native_texture import NativeTexture
+    try:
+        if eye_layout(native) is None:
+            return None
+        names = sorted(folder.glob('eyes_*.png'))
+        if not names:
+            base = NativeTexture(native).to_image()
+            for i, frame in enumerate(eye_animation_frames(native, base)):
+                frame.convert('RGBA').save(folder / f'eyes_{i}.png')
+            names = sorted(folder.glob('eyes_*.png'))
+        if len(names) < 2:
+            return None
+        return {'frames': [p.relative_to(CACHE).as_posix() for p in names], 'default': len(names) - 1}
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 def texture_list(identifier):
@@ -463,7 +487,7 @@ def model_export(identifier, fmt, name):
 
 
 def clear_cache():
-    for sub in ('models', 'exports'):
+    for sub in ('models', 'exports', 'indexes'):
         shutil.rmtree(CACHE / sub, ignore_errors=True)
     return True
 

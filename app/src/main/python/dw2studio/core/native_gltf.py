@@ -21,7 +21,19 @@ from .rig_animation import D, NativeAnimation, parents_from_depths
 MODEL = re.compile(r'^M(\d{3}[A-Z0-9]{4})\.BIN$', re.I)
 
 
+def _native(matrix):
+    """PS1-Matrix wie im Original-Konverter anwenden (v' = M·v).
+
+    NativeAnimation liefert für den Rig-Editor die transponierte Rotation;
+    für die Anzeige wird sie zurückgedreht, sonst verdrehen sich Gliedmaßen.
+    """
+    m = np.array(matrix, dtype=float)
+    m[:3, :3] = m[:3, :3].T
+    return m
+
+
 def _trs(matrix):
+    matrix = _native(matrix)
     scale = np.linalg.norm(matrix[:3, :3], axis=0)
     if np.min(scale) < 1e-8:
         return matrix[:3, 3].tolist(), [0., 0., 0., 1.], [1., 1., 1.]

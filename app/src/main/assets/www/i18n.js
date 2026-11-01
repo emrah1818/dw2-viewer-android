@@ -3,7 +3,7 @@ export const EN = {
   'BIN / ISO öffnen': 'Open BIN / ISO',
   start_text: 'Open your own game image (BIN/ISO). The app contains no game data.',
   'Digimon suchen …': 'Search Digimon …',
-  'Ansicht': 'View', 'Boden-Raster': 'Ground grid', 'Drahtgitter': 'Wireframe', 'Pixel-Look (PS1)': 'Pixel look (PS1)',
+  'Ansicht': 'View', 'Augen blinzeln': 'Blinking eyes', 'Boden-Raster': 'Ground grid', 'Drahtgitter': 'Wireframe', 'Pixel-Look (PS1)': 'Pixel look (PS1)',
   'Nachbarmodelle vorbereiten': 'Prepare neighbouring models', 'Licht': 'Light', 'Hintergrund': 'Background',
   'Textur als PNG exportieren': 'Export texture as PNG', 'Modell als GLB exportieren': 'Export model as GLB',
   'Name': 'Name', 'Typ & Specialty': 'Type & Specialty', 'Attacken': 'Battle techniques',
