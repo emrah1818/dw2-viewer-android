@@ -39,6 +39,12 @@
       <div id="v-name">–</div>
       <button id="v-next" aria-label="Weiter">▶</button>
     </div>
+    <div id="editbar">
+      <button id="b-compare" class="small" data-i18n="Bearbeitet">Bearbeitet</button>
+      <button id="b-undo" class="small" title="Rückgängig">↶</button>
+      <button id="b-redo" class="small" title="Wiederherstellen">↷</button>
+      <span id="edit-state" class="hint"></span>
+    </div>
     <div id="animbar">
       <select id="anim"></select>
       <button id="play">⏸</button>
@@ -54,10 +60,36 @@
       <label class="row"><input type="checkbox" id="o-prefetch" checked> <span data-i18n="Nachbarmodelle vorbereiten">Nachbarmodelle vorbereiten</span></label>
       <label class="row"><span data-i18n="Licht">Licht</span> <input type="range" id="o-light" min="0.2" max="3" step="0.1" value="1.2"></label>
       <label class="row"><span data-i18n="Hintergrund">Hintergrund</span> <input type="color" id="o-bg" value="#16243a"></label>
+    </details>
+    <details class="card" id="tex-card">
+      <summary data-i18n="Texturen">Texturen</summary>
+      <label class="f" data-i18n="Palettenmodus">Palettenmodus</label>
+      <select id="o-palette">
+        <option value="v31" data-i18n="Wie v3.1 · automatische Paletten (Standard)">Wie v3.1 · automatische Paletten (Standard)</option>
+        <option value="protect" data-i18n="Farbschutz · kleine Änderungen bevorzugen">Farbschutz · kleine Änderungen bevorzugen</option>
+        <option value="exact" data-i18n="Exakt RGB555 · nur wenn alle Farben passen">Exakt RGB555 · nur wenn alle Farben passen</option>
+      </select>
+      <label class="f" data-i18n="Große PNG verkleinern mit">Große PNG verkleinern mit</label>
+      <select id="o-resize">
+        <option value="BOX" data-i18n="Flächenmittel (BOX)">Flächenmittel (BOX)</option>
+        <option value="NEAREST" data-i18n="Pixelgrafik (NEAREST)">Pixelgrafik (NEAREST)</option>
+      </select>
       <div class="btns">
-        <button id="b-tex" data-i18n="Textur als PNG exportieren">Textur als PNG exportieren</button>
-        <button id="b-glb" data-i18n="Modell als GLB exportieren">Modell als GLB exportieren</button>
+        <button id="b-png-export" data-i18n="PNG exportieren">PNG exportieren</button>
+        <button id="b-png-import" class="primary" data-i18n="PNG importieren / Textur ersetzen">PNG importieren / Textur ersetzen</button>
+        <button id="b-eyes-import" data-i18n="Augen ersetzen">Augen ersetzen</button>
       </div>
+      <p class="hint" data-i18n="tex_note">Spieltextur: 128×256, 16 Farben je Palette. PNG in 1×–4× wird angenommen. Vor dem Vormerken zeigt die Vorschau das tatsächliche PS1-Ergebnis.</p>
+    </details>
+    <details class="card" id="model-card">
+      <summary data-i18n="3D-Modelle">3D-Modelle</summary>
+      <div class="btns">
+        <button id="b-glb" data-i18n="GLB exportieren">GLB exportieren</button>
+        <button id="b-gltf" data-i18n="glTF exportieren">glTF exportieren</button>
+        <button id="b-3d-import" class="primary" data-i18n="3D-Datei importieren / ersetzen">3D-Datei importieren / ersetzen</button>
+        <button id="b-restore" data-i18n="Originalmodell wiederherstellen">Originalmodell wiederherstellen</button>
+      </div>
+      <p class="hint" data-i18n="model_note">GLB/glTF aus dieser App enthalten Knochen, Animationen und die Spieldaten und ersetzen ein Digimon vollständig. Fremde GLB/glTF/OBJ werden per Knochenzuordnung eingebaut.</p>
     </details>
   </section>
 
@@ -79,8 +111,12 @@
         <button id="b-saveproj" data-i18n="Mod-Projekt speichern">Mod-Projekt speichern</button>
         <button id="b-loadproj" data-i18n="Mod-Projekt laden">Mod-Projekt laden</button>
         <button id="b-saveroster" data-i18n="Spielstand/Memorycard exportieren">Spielstand/Memorycard exportieren</button>
+        <button id="b-overwrite" data-i18n="Image überschreiben …">Image überschreiben …</button>
+        <button id="b-backup" data-i18n="Sicherung exportieren" hidden>Sicherung exportieren</button>
+        <button id="b-undo2" data-i18n="Rückgängig">Rückgängig</button>
+        <button id="b-redo2" data-i18n="Wiederherstellen">Wiederherstellen</button>
       </div>
-      <p class="hint" data-i18n="changes_note">Das Original-Image bleibt unverändert. Es wird immer eine neue, geprüfte Datei erzeugt.</p>
+      <p class="hint" data-i18n="changes_note">Alle Änderungen sind zunächst nur vorgemerkt. „Neues Image exportieren“ erzeugt eine neue, geprüfte Datei; „Image überschreiben“ ersetzt dein Original (die alte Fassung bleibt als Sicherung in der App). Danach das Image im Emulator testen.</p>
     </div>
   </section>
 

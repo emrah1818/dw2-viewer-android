@@ -1,5 +1,5 @@
 native/deps/
-app/src/main/assets/www/lib/
+
 app/build/
 build/
 .gradle/

@@ -399,7 +399,7 @@ def _convert(source, output):
     convert_folder(source, output)
 
 
-def prepare_model(identifier):
+def prepare_model(identifier, original=False):
     from dw2studio.core.fast_loading import ModelRequest, build_model
     from dw2studio.core.auto_models import selected_model_entries, model_animation_names
     s = _need_session()
@@ -414,8 +414,9 @@ def prepare_model(identifier):
     overrides = {}
     for e in files:
         edit = s.edits.get((e.path, e.lba))
-        if edit:
+        if edit and not original:
             overrides[Path(e.path.replace('\\', '/')).name] = edit.replacement
+    edited = any((e.path, e.lba) in s.edits for e in files)
     folder = CACHE / 'models' / CONVERTER_VERSION / S.index_key / key
     if overrides:
         digest = hashlib.sha256()
@@ -434,9 +435,10 @@ def prepare_model(identifier):
     except Exception:
         animations = []
     native = next((e for e in files if Path(e.path.replace('\\', '/')).name.upper().startswith('M')), None)
-    eyes = _eye_frames(s.current(native), model.parent) if native else None
+    eyes = _eye_frames(s.original(native) if original else s.current(native), model.parent) if native else None
     return {'url': model.relative_to(CACHE).as_posix(), 'name': c.name, 'id': c.id, 'code': c.code,
-            'animations': animations, 'eyes': eyes, 'seconds': round(time.perf_counter() - started, 2)}
+            'animations': animations, 'eyes': eyes, 'edited': edited, 'original': bool(original),
+            'seconds': round(time.perf_counter() - started, 2)}
 
 
 def _display_eye_layout(native):
@@ -499,35 +501,64 @@ def _eye_frames(native, folder):
         return None
 
 
-def texture_list(identifier):
-    from dw2studio.core.mini_assets import texture_slots
-    info = prepare_model(identifier)
-    return {'slots': [name for name, _ in texture_slots(CACHE / info['url'])], 'url': info['url']}
+# --------------------------------------------------------------------------- Verlauf (Rückgängig / Wiederherstellen)
+UNDO, REDO = [], []
+MUTATING = {'rename', 'set_type', 'set_specialty', 'set_enemy_values', 'apply_attacks', 'roster_change',
+            'roster_restore', 'discard', 'load_project', 'png_apply', 'transfer_apply', 'bin_apply',
+            'rig_apply', 'restore_original'}
 
 
-def texture_export(identifier, slot, name):
-    from dw2studio.core.mini_assets import export_texture
-    info = prepare_model(identifier)
-    folder = _exports()
-    target = folder / _unique_name(folder, name)
-    export_texture(CACHE / info['url'], int(slot), target)
-    return {'path': str(target), 'name': target.name}
+def _snapshot():
+    return (dict(S.session.edits) if S.session else {},
+            bytes(S.roster.raw) if S.roster is not None else None)
 
 
-def model_export(identifier, fmt, name):
-    from dw2studio.core.model_export import export_model
-    if fmt not in ('glb', 'gltf'):
-        raise ValueError('Unterstützt: GLB oder glTF.')
-    info = prepare_model(identifier)
-    folder = _exports()
-    stem = re.sub(r'\.(gltf|glb|obj)$', '', name, flags=re.I)
-    target = folder / _unique_name(folder, stem + '.' + fmt)
-    export_model(CACHE / info['url'], target)
-    return {'path': str(target), 'name': target.name}
+def _restore(snap):
+    edits, roster = snap
+    if S.session is not None:
+        S.session.edits = dict(edits)
+    if S.roster is not None and roster is not None:
+        S.roster.raw = bytearray(roster)
+    _refresh_names()
+
+
+def history():
+    return {'undo': len(UNDO), 'redo': len(REDO)}
+
+
+def undo():
+    if not UNDO:
+        raise ValueError('Nichts zum Rückgängigmachen.')
+    REDO.append(_snapshot())
+    _restore(UNDO.pop())
+    return history()
+
+
+def redo():
+    if not REDO:
+        raise ValueError('Nichts zum Wiederherstellen.')
+    UNDO.append(_snapshot())
+    _restore(REDO.pop())
+    return history()
+
+
+# --------------------------------------------------------------------------- Image überschreiben
+def adopt_image(new_path, old_path):
+    """Nach erfolgreichem Überschreiben: neues Image als Arbeitsstand übernehmen, altes als Sicherung behalten."""
+    new_path, old_path = Path(new_path), Path(old_path)
+    backup = old_path.with_name('Sicherung_' + old_path.name)
+    backup.unlink(missing_ok=True)
+    if old_path.exists():
+        old_path.replace(backup)
+    new_path.replace(old_path)
+    info = open_image(str(old_path))
+    UNDO.clear(); REDO.clear()
+    info['backup'] = str(backup) if backup.exists() else None
+    return info
 
 
 def clear_cache():
-    for sub in ('models', 'exports', 'indexes'):
+    for sub in ('models', 'exports', 'indexes', 'work'):
         shutil.rmtree(CACHE / sub, ignore_errors=True)
     return True
 
@@ -548,9 +579,19 @@ _METHODS = {
     'roster_restore': roster_restore, 'roster_export': roster_export,
     'pending': pending, 'discard': discard, 'save_image': save_image,
     'save_project': save_project, 'load_project': load_project, 'delete_export': delete_export,
-    'prepare_model': prepare_model, 'texture_list': texture_list, 'texture_export': texture_export,
-    'model_export': model_export, 'clear_cache': clear_cache, 'translate': translate,
+    'prepare_model': prepare_model, 'clear_cache': clear_cache, 'translate': translate,
+    'history': history, 'undo': undo, 'redo': redo, 'adopt_image': adopt_image,
 }
+
+
+def _register_edit():
+    import android_edit as e
+    for name in ('png_export', 'png_preview', 'png_apply', 'cancel', 'model_export', 'inspect_3d',
+                 'transfer_plan', 'transfer_apply', 'bin_apply', 'rig_prepare', 'rig_apply', 'restore_original'):
+        _METHODS[name] = getattr(e, name)
+
+
+_register_edit()
 
 
 def call(method, args_json='[]'):
@@ -559,7 +600,14 @@ def call(method, args_json='[]'):
             raise ValueError(f'Unbekannte Methode: {method}')
         args = json.loads(args_json) if args_json else []
         with _lock:
+            before = _snapshot() if method in MUTATING else None
             data = _METHODS[method](*args)
+            if before is not None and before != _snapshot():
+                UNDO.append(before)
+                del UNDO[:-50]
+                REDO.clear()
+            if method == 'open_image':
+                UNDO.clear(); REDO.clear()
         return json.dumps({'ok': True, 'data': data}, ensure_ascii=False)
     except Exception as exc:  # Fehlertext geht an die Oberfläche; Details ins Log
         traceback.print_exc()

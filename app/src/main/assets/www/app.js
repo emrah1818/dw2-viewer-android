@@ -164,13 +164,14 @@ async function loadModel(id) {
   const seq = ++loadSeq;
   $('#stage-msg').textContent = t('Modell wird vorbereitet …');
   try {
-    const info = await native('prepare_model', id);
+    const info = await native('prepare_model', id, state.showOriginal);
     if (seq !== loadSeq) return;
     const r = await view.load(BASE + info.url);
     if (seq !== loadSeq) return;
     state.loaded = { id, info };
     $('#stage-msg').textContent = '';
     $('#v-name').textContent = info.name;
+    showEditState(info);
     $('#anim').innerHTML = r.animations.length
       ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('')
       : `<option>${t('Keine Animationen')}</option>`;
@@ -211,25 +212,178 @@ async function exportFile(promise) {
   toast(saved ? `${t('Gespeichert')}: ${f.name}` : t('Nicht gespeichert'));
   setOverlay(false);
 }
-$('#b-tex').onclick = async () => {
-  if (state.id == null) return toast(t('Digimon wählen'));
-  try {
-    const list = await busy('Modell wird vorbereitet …', () => native('texture_list', state.id));
-    let slot = 0;
-    if (list.slots.length > 1) {
-      slot = await pickBox(t('Textur wählen'), list.slots.map((n, i) => ({ value: i, label: n })), 0);
-      if (slot == null) return;
-    }
-    const code = state.loaded?.info.code ?? 'textur';
-    await exportFile(busy('Modell wird vorbereitet …', () => native('texture_export', state.id, slot, `${code}_${state.id}_${slot}.png`)));
-  } catch (e) { await fail(e); }
+// ---------------------------------------------------------------- Original / Bearbeitet, Rückgängig
+state.showOriginal = false;
+function showEditState(info) {
+  const b = $('#b-compare');
+  b.textContent = t(state.showOriginal ? 'Original' : 'Bearbeitet');
+  b.classList.toggle('orig', state.showOriginal);
+  $('#edit-state').textContent = info?.foreign ? t('Nur Ansicht (Import)') : info?.edited ? t('geändert · vorgemerkt') : t('unverändert');
+}
+$('#b-compare').onclick = () => {
+  state.showOriginal = !state.showOriginal;
+  if (state.id != null) loadModel(state.id); else showEditState(null);
 };
-$('#b-glb').onclick = async () => {
-  if (state.id == null) return toast(t('Digimon wählen'));
-  const code = state.loaded?.info.code ?? 'modell';
-  try { await exportFile(busy('Modell wird vorbereitet …', () => native('model_export', state.id, 'glb', `${code}_${state.id}.glb`))); }
+async function afterChange(message) {
+  state.showOriginal = false;
+  state.prefetch.clear();
+  try { state.catalog = await native('catalog'); renderList(); } catch { /* Anzeige */ }
+  await refreshPending();
+  if (state.id != null) await loadModel(state.id);
+  if (message) toast(message);
+}
+async function historyStep(kind) {
+  try { await native(kind); await afterChange(t(kind === 'undo' ? 'Rückgängig gemacht' : 'Wiederhergestellt')); }
+  catch (e) { await fail(e); }
+}
+$('#b-undo').onclick = () => historyStep('undo');
+$('#b-redo').onclick = () => historyStep('redo');
+$('#b-undo2').onclick = () => historyStep('undo');
+$('#b-redo2').onclick = () => historyStep('redo');
+async function refreshHistory() {
+  try {
+    const h = await native('history');
+    for (const id of ['#b-undo', '#b-undo2']) $(id).disabled = !h.undo;
+    for (const id of ['#b-redo', '#b-redo2']) $(id).disabled = !h.redo;
+  } catch { /* ohne Image */ }
+}
+
+// ---------------------------------------------------------------- Texturen
+const needDigimon = () => { if (state.id == null) { toast(t('Digimon wählen')); return false; } return true; };
+$('#b-png-export').onclick = async () => {
+  if (!needDigimon()) return;
+  const factor = await pickBox(t('Arbeitsauflösung (Spiel bleibt 128×256)'),
+    [1, 2, 3, 4].map(k => ({ value: k, label: `${k}× · ${128 * k}×${256 * k}` })), 1);
+  if (factor == null) return;
+  try { await exportFile(busy('PNG wird erstellt …', () => native('png_export', state.id, true, factor))); }
   catch (e) { await fail(e); }
 };
+async function pngImport(eyesOnly) {
+  if (!needDigimon()) return;
+  try {
+    const file = await native('pick_file');
+    if (!file) return;
+    if (!/\.png$/i.test(file.name)) throw new Error(t('Bitte eine PNG-Datei wählen.'));
+    const prev = await busy('PS1-Farben werden berechnet …', () =>
+      native('png_preview', state.id, file.path, $('#o-palette').value, eyesOnly, $('#o-resize').value));
+    const accepted = await modal((box, close) => {
+      const q = prev.quality;
+      const img = (k, label) => prev.images[k] ? `<div><img src="${BASE + prev.images[k]}" alt=""><br>${esc(t(label))}</div>` : '';
+      box.innerHTML = `<h3>${t('Vorschau vor dem Vormerken')}</h3>
+        <div class="cmp">${img('original', 'Original im Spiel')}${img('desired', 'Deine PNG')}${img('result', 'Erwartetes Ergebnis im Spiel')}</div>
+        ${prev.factor > 1 ? `<p class="warn">${t('PNG {w}×{h} wurde auf 128×256 verkleinert ({f}×).', { w: prev.size[0], h: prev.size[1], f: prev.factor })}</p>` : ''}
+        ${q ? `<p class="hint">${t('Mittlerer Farbfehler')}: ${q.mean_rgb_error}/255 · ${t('Starke Abweichungen')}: ${(q.bad_pixel_fraction * 100).toFixed(1)} % · ${t('Geänderte Paletten')}: ${q.palettes_rewritten} · ${t('Neue Palettenfarben')}: ${q.colors_rewritten}</p>
+             <p class="hint">${t('Bearbeitete Pixel')}: ${q.edited_pixels_checked} · ${t('Farbfehler dort')}: ${q.edited_mean_rgb_error}/255</p>` : ''}
+        ${prev.reserved_ignored || prev.unmapped_ignored ? `<p class="warn">${t('{a} Pixel in den Palettenzeilen und {b} Pixel außerhalb der Modellflächen werden ignoriert.', { a: prev.reserved_ignored, b: prev.unmapped_ignored })}</p>` : ''}
+        ${prev.warn ? `<p class="warn">${t('Einzelne bearbeitete Bereiche weichen deutlich ab. Bei entfärbten Augen den Modus Farbschutz wählen.')}</p>` : ''}
+        ${prev.eye_frames ? `<p class="hint">${t('Augenposen werden mitgeschrieben.')}</p>` : ''}
+        <p class="hint">${t('Nur fortfahren, wenn das rechte Bild deinen Farben entspricht. Die Original-BIN bleibt unverändert.')}</p>
+        <div class="btns"><button id="m-no">${t('Abbrechen')}</button><button id="m-yes" class="primary">${t('Farben stimmen – vormerken')}</button></div>`;
+      $('#m-no', box).onclick = () => close(false); $('#m-yes', box).onclick = () => close(true);
+    });
+    if (!accepted) { native('cancel', prev.token).catch(() => {}); return; }
+    const r = await busy('Textur wird vorgemerkt …', () => native('png_apply', prev.token));
+    await afterChange(r.changed ? t('Textur vorgemerkt · Vorschau aktualisiert') : t('PNG enthält keine wirksame Änderung.'));
+  } catch (e) { await fail(e); } finally { setOverlay(false); }
+}
+$('#b-png-import').onclick = () => pngImport(false);
+$('#b-eyes-import').onclick = () => pngImport(true);
+
+// ---------------------------------------------------------------- 3D-Modelle
+async function exportModel(fmt) {
+  if (!needDigimon()) return;
+  try {
+    const f = await busy('Modell wird exportiert …', () => native('model_export', state.id, fmt, null));
+    if (!f.native) log(t('Hinweis: Animationen dieses Modells sind nicht als Spieldaten eingebettet (nur Ansicht).'));
+    await exportFile(Promise.resolve(f));
+  } catch (e) { await fail(e); }
+}
+$('#b-glb').onclick = () => exportModel('glb');
+$('#b-gltf').onclick = () => exportModel('gltf');
+$('#b-restore').onclick = async () => {
+  if (!needDigimon() || !(await confirmBox(t('Modell- und Animationsänderungen dieses Digimon verwerfen?')))) return;
+  try { const r = await native('restore_original', state.id); await afterChange(`${r.removed} ${t('Datei(en) zurückgesetzt')}`); }
+  catch (e) { await fail(e); }
+};
+async function showImport(ins) {
+  state.loaded = { id: null, info: { foreign: true } };
+  $('#v-name').textContent = ins.name;
+  showEditState({ foreign: true });
+  try {
+    const r = await view.load(BASE + ins.view);
+    $('#anim').innerHTML = r.animations.length ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('') : `<option>${t('Keine Animationen')}</option>`;
+    if (r.animations.length) view.play(0);
+  } catch (e) { await fail(e); }
+}
+$('#b-3d-import').onclick = async () => {
+  try {
+    const file = await native('pick_file');
+    if (!file) return;
+    const ins = await busy('3D-Datei wird geprüft …', () => native('inspect_3d', file.path, state.id));
+    const target = state.id != null ? nameOf(state.id) : null;
+    const choice = await modal((box, close) => {
+      let body = `<h3>${esc(ins.name)}</h3>`;
+      if (ins.kind === 'transfer') {
+        const p = ins.plan;
+        body += `<p>${t('DW2-Austauschmodell')}: <b>${esc(ins.source.name)}</b> · ${t('Knochen')} ${p ? `${p.source_bones} → ${p.target_bones}` : ''}</p>`;
+        if (p) body += `<table class="plan">${p.rows.map(r => `<tr><td>${esc(r[0])}</td><td>${r[1]} / ${r[2]} B</td><td>${esc(r[3])}</td></tr>`).join('')}</table>` +
+          (p.errors.length ? `<p class="bad">${p.errors.map(esc).join('<br>')}</p>` : '');
+      } else if (ins.kind === 'foreign') {
+        body += `<p>${t('Fremdes 3D-Modell. Zum Einbau ins Spiel werden seine Teile den Knochen des Ziel-Digimon zugeordnet.')}</p>`;
+      } else {
+        body += `<p>${t('Native Modell-BIN (muss genau so groß sein wie das Ziel).')}</p>`;
+      }
+      const canReplace = target && (ins.kind !== 'transfer' || (ins.plan && !ins.plan.errors.length));
+      body += `<div class="btns">
+        ${ins.view ? `<button data-c="view">${t('Nur ansehen')}</button>` : ''}
+        ${canReplace ? `<button data-c="replace" class="primary">${t('{name} ersetzen', { name: esc(target) })}</button>` : ''}
+        <button data-c="">${t('Abbrechen')}</button></div>
+        ${!target ? `<p class="hint">${t('Zum Ersetzen zuerst in der Liste ein Ziel-Digimon wählen.')}</p>` : ''}`;
+      box.innerHTML = body;
+      $$('button[data-c]', box).forEach(b => { b.onclick = () => close(b.dataset.c || null); });
+    });
+    if (!choice) { native('cancel', ins.token).catch(() => {}); return; }
+    if (choice === 'view') { show('page-view'); await showImport(ins); return; }
+    if (ins.kind === 'transfer') {
+      await busy('Digimon wird ersetzt …', () => native('transfer_apply', ins.token, state.id));
+      await afterChange(t('Digimon ersetzt · Vorschau aktualisiert'));
+    } else if (ins.kind === 'native_bin') {
+      await busy('Modell wird ersetzt …', () => native('bin_apply', ins.token, state.id));
+      await afterChange(t('Modell-BIN vorgemerkt'));
+    } else {
+      await rigFlow(ins);
+    }
+    show('page-view');
+  } catch (e) { await fail(e); } finally { setOverlay(false); }
+};
+async function rigFlow(ins) {
+  const rig = await busy('Knochen werden zugeordnet …', () => native('rig_prepare', ins.token, state.id));
+  const bones = Array.from({ length: rig.bones }, (_, i) => i);
+  const result = await modal((box, close) => {
+    box.innerHTML = `<h3>${t('Knochenzuordnung')}</h3>
+      <p class="hint">${t('{f} Dreiecke · {b} Knochen im Ziel · Platzbedarf mind. {m} von {g} Bytes', { f: rig.faces, b: rig.bones, m: rig.minimum, g: rig.budget })}</p>
+      ${rig.minimum > rig.budget ? `<p class="bad">${t('Das Modell hat zu viele Dreiecke für diesen Modellplatz. Vorher reduzieren.')}</p>` : ''}
+      ${rig.groups.map((g, i) => `<label class="f">${esc(g.group)} · ${g.faces} ${t('Dreiecke')} · ${t('Vorschlag')}: ${esc(t(g.how))}</label>
+        <select data-g="${i}">${bones.map(b => `<option value="${b}" ${b === g.bone ? 'selected' : ''}>${t('Knochen')} ${String(b).padStart(2, '0')}${rig.parents[b] < 0 ? ' · ' + t('Wurzel') : ' ← ' + String(rig.parents[b]).padStart(2, '0')}</option>`).join('')}</select>`).join('')}
+      <label class="row"><span>${t('Größe')} (×)</span><input type="range" id="r-scale" min="0.25" max="4" step="0.05" value="1"><b id="r-sv">1.00</b></label>
+      ${rig.has_texture ? `<label class="row"><input type="checkbox" id="r-tex" checked> <span>${t('Textur des Modells übernehmen (auf 14 Farben reduziert)')}</span></label>` : ''}
+      <p class="hint">${t('Das Modell wird automatisch eingepasst. Vorhandene Animationen bleiben erhalten.')}</p>
+      <div class="btns"><button id="m-no">${t('Abbrechen')}</button><button id="m-yes" class="primary">${t('Prüfen und vormerken')}</button></div>`;
+    $('#r-scale', box).oninput = e => { $('#r-sv', box).textContent = Number(e.target.value).toFixed(2); };
+    $('#m-no', box).onclick = () => close(null);
+    $('#m-yes', box).onclick = () => {
+      const mapping = {};
+      $$('select[data-g]', box).forEach(sel => { mapping[rig.groups[Number(sel.dataset.g)].group] = Number(sel.value); });
+      close({ mapping, texture: $('#r-tex', box)?.checked ?? false, scale: Number($('#r-scale', box).value) });
+    };
+  });
+  if (!result) { native('cancel', ins.token).catch(() => {}); return; }
+  const r = await busy('Modell wird gebaut und geprüft …', () =>
+    native('rig_apply', ins.token, state.id, result.mapping, result.texture, $('#o-palette').value, result.scale));
+  r.warnings.forEach(w => log(w));
+  await afterChange(t('Formatprüfung bestanden: {u}/{b} Geometriebytes · Vorschau aktualisiert', { u: r.report.geometry_used, b: r.report.geometry_budget }));
+  if (r.warnings.length) toast(r.warnings[0]);
+}
 
 // ---------------------------------------------------------------- Bearbeiten
 function renderEdit() {
@@ -400,6 +554,7 @@ let pendingItems = [];
 async function refreshPending() {
   try { pendingItems = state.image ? await native('pending') : []; } catch { pendingItems = []; }
   renderPending();
+  refreshHistory();
 }
 function renderPending() {
   const n = pendingItems.length;
@@ -442,6 +597,23 @@ $('#b-loadproj').onclick = async () => {
       if (state.id != null) loadModel(state.id);
     }
   } catch (e) { await fail(e); } finally { setOverlay(false); }
+};
+$('#b-overwrite').onclick = async () => {
+  if (!pendingItems.some(p => p.kind === 'file')) return toast(t('Keine Änderungen vorgemerkt.'));
+  if (!(await confirmBox(t('Dein Original-Image „{n}“ wirklich überschreiben? Die bisherige Fassung bleibt als Sicherung in der App.', { n: state.image?.name || '' })))) return;
+  try {
+    const f = await busy('Image wird geprüft und gespeichert …', () => native('save_image', 'overwrite'));
+    const info = await busy('Original wird überschrieben …', () => native('overwrite_original', f.path));
+    state.backup = info.backup;
+    $('#b-backup').hidden = !info.backup;
+    state.catalog = await native('catalog'); renderList();
+    await afterChange(t('Original-Image überschrieben. Bitte im Emulator testen.'));
+  } catch (e) { await fail(e); } finally { setOverlay(false); }
+};
+$('#b-backup').onclick = async () => {
+  if (!state.backup) return;
+  try { await native('save_export', state.backup, state.backup.split('/').pop()); toast(t('Sicherung gespeichert')); }
+  catch (e) { await fail(e); }
 };
 $('#b-saveroster').onclick = async () => {
   if (!pendingItems.some(p => p.kind === 'roster')) return toast(t('Keine Änderungen vorgemerkt.'));

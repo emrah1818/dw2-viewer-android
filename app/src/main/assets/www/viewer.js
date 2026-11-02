@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
 
 /** three.js-Viewer für die vom DW2-Konverter erzeugten glTF-Modelle (Touch: drehen, zoomen, verschieben). */
 export class Viewer {
@@ -101,7 +102,9 @@ export class Viewer {
   async load(url) {
     this.clear();
     const mine = this.token;
-    const gltf = await this.loader.loadAsync(url);
+    const gltf = /\.obj$/i.test(url)
+      ? { scene: await new OBJLoader().loadAsync(url), animations: [] }
+      : await this.loader.loadAsync(url);
     if (mine !== this.token) throw new Error('abgebrochen');
     this.model = gltf.scene;
     this.scene.add(this.model);

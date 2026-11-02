@@ -32,6 +32,8 @@ class MainActivity : AppCompatActivity() {
     private val pool = Executors.newSingleThreadExecutor()
     private var pendingPick: Pair<String, String>? = null          // (callId, art)
     private var pendingSave: Pair<String, String>? = null          // (callId, quellpfad)
+    private var imageUri: Uri? = null                               // Original-Image des Nutzers (zum Überschreiben)
+    private var imagePath: String? = null                           // Arbeitskopie im App-Speicher
 
     private val pickFile = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val (id, kind) = pendingPick ?: return@registerForActivityResult
@@ -46,19 +48,7 @@ class MainActivity : AppCompatActivity() {
         if (uri == null) { resolve(id, ok(false)); return@registerForActivityResult }
         pool.execute {
             try {
-                val file = File(source)
-                val size = file.length()
-                var copied = 0L
-                contentResolver.openOutputStream(uri, "w")!!.use { out ->
-                    file.inputStream().use { input ->
-                        val buf = ByteArray(1 shl 20)
-                        while (true) {
-                            val n = input.read(buf); if (n < 0) break
-                            out.write(buf, 0, n); copied += n
-                            if (size > (8L shl 20)) progress("Datei wird gespeichert …", (copied * 100 / size).toInt())
-                        }
-                    }
-                }
+                writeTo(uri, File(source), "w")
                 py.call("delete_export", JSONArray().put(source).toString())
                 resolve(id, ok(true))
             } catch (e: Exception) {
@@ -142,6 +132,37 @@ class MainActivity : AppCompatActivity() {
         web.post { web.evaluateJavascript("window.__progress && window.__progress(${JSONObject.quote(text)}, $percent)", null) }
     }
 
+    /** Datei in eine vom Nutzer gewählte Adresse schreiben (mit Fortschritt). */
+    private fun writeTo(uri: Uri, file: File, mode: String) {
+        val size = file.length()
+        var copied = 0L
+        contentResolver.openOutputStream(uri, mode)!!.use { out ->
+            file.inputStream().use { input ->
+                val buf = ByteArray(1 shl 20)
+                while (true) {
+                    val n = input.read(buf); if (n < 0) break
+                    out.write(buf, 0, n); copied += n
+                    if (size > (8L shl 20)) progress("Datei wird gespeichert …", (copied * 100 / size).toInt())
+                }
+            }
+        }
+    }
+
+    /** Neues Image über das Original des Nutzers schreiben; die alte Arbeitskopie bleibt als Sicherung. */
+    private fun overwriteOriginal(id: String, exported: String) {
+        val uri = imageUri
+        val path = imagePath
+        if (uri == null || path == null) { resolve(id, error("Kein Original-Image bekannt. Bitte Image erneut öffnen.")); return }
+        try {
+            writeTo(uri, File(exported), "wt")
+        } catch (e: Exception) {
+            resolve(id, error("Das Original konnte nicht überschrieben werden (${e.message ?: "kein Schreibzugriff"}). Bitte „Neues Image exportieren“ verwenden."))
+            return
+        }
+        progress("Image wird neu eingelesen …", -1)
+        resolve(id, py.call("adopt_image", JSONArray().put(exported).put(path).toString()))
+    }
+
     private fun query(uri: Uri, column: String): String? =
         contentResolver.query(uri, arrayOf(column), null, null, null)?.use {
             if (it.moveToFirst() && !it.isNull(0)) it.getString(0) else null
@@ -174,6 +195,17 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            if (kind == "image") {
+                imageUri = uri
+                imagePath = target.absolutePath
+                try {
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+                } catch (_: Exception) { /* Schreibrecht nicht dauerhaft – Überschreiben meldet das */ }
+            }
+            if (kind == "file") {
+                resolve(id, ok(JSONObject().put("path", target.absolutePath).put("name", name)))
+                return
+            }
             val method = when (kind) { "image" -> "open_image"; "roster" -> "roster_open"; else -> "load_project" }
             progress(if (kind == "image") "Image wird analysiert …" else "Datei wird gelesen …", -1)
             resolve(id, py.call(method, JSONArray().put(target.absolutePath).toString()))
@@ -187,7 +219,11 @@ class MainActivity : AppCompatActivity() {
         @JavascriptInterface
         fun invoke(id: String, method: String, argsJson: String) {
             when (method) {
-                "pick_image", "pick_roster", "pick_project" -> runOnUiThread {
+                "overwrite_original" -> {
+                    val exported = JSONArray(argsJson).getString(0)
+                    pool.execute { overwriteOriginal(id, exported) }
+                }
+                "pick_image", "pick_roster", "pick_project", "pick_file" -> runOnUiThread {
                     pendingPick = id to method.removePrefix("pick_")
                     pickFile.launch(arrayOf("*/*"))
                 }

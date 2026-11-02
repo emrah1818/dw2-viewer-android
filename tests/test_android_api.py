@@ -166,8 +166,7 @@ def run():
         assert len(gltf['meshes']) == 2 and len(gltf['animations']) == 2 and gltf['images'][0]['uri'].startswith('data:image/png')
         assert gltf['scenes'][0]['extras']['blinking_data'][0] == 255 and gltf['nodes'][0]['children']
         assert ok('prepare_model', 3)['url'] == m['url']
-        tex = ok('texture_list', 3); assert tex['slots'], tex
-        png = ok('texture_export', 3, 0, 'tex.png'); assert Path(png['path']).read_bytes()[:4] == b'\x89PNG'
+        png = ok('png_export', 3, True, 1); assert Path(png['path']).read_bytes()[:4] == b'\x89PNG'
         glb = ok('model_export', 3, 'glb', 'agumon'); assert Path(glb['path']).read_bytes()[:4] == b'glTF'
         # Textur-/Namensänderung im Modell: neuer Cache-Ordner, alte Datei bleibt
         assert ok('prepare_model', 3)['animations']

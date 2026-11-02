@@ -46,3 +46,10 @@ label.f{display:block;font-size:12.5px;color:var(--sub);margin:8px 0 3px}.grid2{
 .pend{border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0;background:var(--panel)}.pend small{display:block;color:var(--sub);white-space:pre-wrap}
 .slot{width:100%;text-align:left;margin:4px 0;display:block}
 pre#log{white-space:pre-wrap;font-size:12px;color:var(--sub);max-height:40vh;overflow:auto}
+
+#editbar{display:flex;gap:8px;padding:0 10px 8px;align-items:center}#editbar .hint{flex:1;text-align:right}
+#b-compare.orig{background:#6a4b10;border-color:#a77b1c}
+.cmp{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center;font-size:12px}
+.cmp img{width:100%;image-rendering:pixelated;background:repeating-conic-gradient(#223 0 25%,#334 0 50%) 0 0/16px 16px;border-radius:6px}
+.warn{color:var(--warn)}
+table.plan{width:100%;font-size:12px;border-collapse:collapse}table.plan td{border-bottom:1px solid var(--line);padding:4px}
