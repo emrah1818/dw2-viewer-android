@@ -12,8 +12,8 @@ android {
         applicationId = "app.dw2viewer.studio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 404
-        versionName = "4.0.4"
+        versionCode = 410
+        versionName = "4.1.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 

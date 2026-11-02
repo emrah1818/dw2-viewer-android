@@ -6,7 +6,7 @@
 2. "uploading an existing file" wählen und den **Inhalt** dieses Ordners hochladen (alle Dateien und Ordner, auch `.github`).
    Tipp: Am PC per Drag & Drop; der Ordner `.github` muss mit hochgeladen werden.
 3. Reiter **Actions** öffnen → "Android APK - DW2 3D Viewer" → **Run workflow**. Der Build dauert ca. 10–15 Minuten.
-4. Danach unter **Releases → Test-APK (neuester Build)** die Datei `DW2_3D_Viewer_v4.0_test.apk` direkt auf dem Handy herunterladen.
+4. Danach unter **Releases → Test-APK (neuester Build)** die Datei `DW2_3D_Viewer_v4.1_test.apk` direkt auf dem Handy herunterladen.
 5. Antippen → Installation aus dieser Quelle erlauben → installieren.
 
 Jede Änderung, die du hochlädst, baut automatisch eine neue Test-APK.
@@ -22,12 +22,15 @@ Jede Änderung, die du hochlädst, baut automatisch eine neue Test-APK.
 - **Änderungen**: Vormerkungen ansehen/verwerfen, neues Image exportieren, Mod-Projekt (.dw2mod) speichern/laden,
   Spielstand exportieren. Das Original bleibt immer unverändert.
 
-## Was gegenüber Windows (noch) fehlt
+## Texturen und 3D-Modelle (ab 4.1)
 
-Die Funktionen, die auf Windows eigene Editor-Fenster mit Vorschau brauchen, sind in der ersten Android-Fassung nicht enthalten:
-PNG-Import in die native Spieltextur (mit Paletten-Vorschau), Augen ersetzen, OBJ importieren & riggen,
-"Digimon ersetzen · Modell + Animationen", Vollfarben-Viewer-Texturen, Augen-Blinzeln in der Vorschau.
-Der Python-Kern dafür ist bereits in der App enthalten; es fehlen nur die Touch-Oberflächen.
+Im Reiter **3D** unter dem Modell:
+- **Texturen:** PNG exportieren (1×–4×), PNG importieren / Textur ersetzen (mit Vorschau Original · deine PNG · Spielergebnis), Augen ersetzen. Palettenmodus „Wie v3.1“ ist Standard.
+- **3D-Modelle:** GLB/glTF exportieren (mit Knochen, Animationen und Spieldaten), 3D-Datei importieren (ansehen oder ersetzen), Originalmodell wiederherstellen.
+- **Bearbeitet/Original** schaltet zwischen Original und vorgemerkter Fassung um; ↶/↷ machen Schritte rückgängig.
+- Änderungen sind erst vorgemerkt. Unter **Änderungen**: „Neues Image exportieren“ oder „Image überschreiben …“ (mit Sicherung).
+
+Details, Testergebnisse und Grenzen: `PRUEFUNG_ANDROID_v4_1.md`.
 
 ## Veröffentlichen (Google Play)
 
