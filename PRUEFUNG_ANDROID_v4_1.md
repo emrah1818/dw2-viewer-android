@@ -55,6 +55,6 @@ Anzeige: Jede Fläche wird mit genau ihrer PS1-Palette dargestellt. Der Windows-
 
 ```
 python tests/test_android_api.py      # Brücke, Werte, Speichern
-python tests/test_android_edit.py     # Tests 1–8 + Undo/Redo + Überschreiben (36 Prüfungen)
+python tests/test_android_edit.py     # Tests 1–8 + Undo/Redo + Überschreiben (35 Prüfungen)
 python tests/e2e_ui.py                # Oberfläche im Browser (benötigt Playwright + Chromium)
 ```
