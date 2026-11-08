@@ -130,6 +130,16 @@ kann es zum Vergleich abschalten. Importierte fremde Modelle bleiben beidseitig.
 sortiert die PS1 per Ordnungstabelle; mit Tiefenpuffer könnten dort vereinzelt noch
 Überlagerungen flackern. Bitte melden, falls nach diesem Build noch Stellen auffallen.
 
+## 6b. Nachtrag: schwarze Ränder (Myotismon-Umhang u. a.)
+**Ursache (PS1-GPU-Regel):** Texel `0x0000` ist durchsichtig. Ist das STP-Bit gesetzt und die
+Fläche halbtransparent, wird der Texel gemischt – auch reines Schwarz mit STP-Bit (`0x8000`).
+Der Viewer hat `0x8000` immer deckend schwarz gezeichnet. Bei additiver Mischung ist so ein
+Texel im Spiel unsichtbar, bei 50 %-Mischung nur ein leichter Schatten.
+**Korrektur:** Python-Konverter und Viewer verwenden jetzt dieselbe Regel (Test vorhanden).
+**Hinweis:** Liegt ein schwarzer Rand auf einer *nicht* halbtransparenten Fläche, ist er auch
+im Spiel schwarz. Falls der Myotismon-Saum nach diesem Build noch schwarz ist, bitte die
+Rohdaten-ZIP von Myotismon schicken.
+
 ## 7. Tests (alle erfolgreich)
 - `tests/test_native_anim.py` – 26 Prüfungen (Spielformat: Lücke, Loop, Halten, Scherung,
   texAnimParts, ABR, MODELDT-Zuordnung inkl. geteilter Animation, Nutzlast, Prüfung, ZIP).

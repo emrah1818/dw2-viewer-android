@@ -176,7 +176,9 @@ def texture_images(native, indices=None):
         r, g, b = (((w >> sh) & 31) * 8 for sh in (0, 5, 10))
         black = (r | g | b) == 0
         flag = (w & 0x8000) != 0
-        alpha = np.where(black, np.where(flag, 255, 0), np.where(flag & stp, 127, 255))
+        # PS1-GPU: 0x0000 ist durchsichtig; gesetztes STP-Bit auf halbtransparenter Fläche wird
+        # gemischt – auch 0x8000 (Schwarz mit STP). Additiv/subtraktiv ist Schwarz damit unsichtbar.
+        alpha = np.where(flag & stp, 127, np.where(black & ~flag, 0, 255))
         rgba[..., 0], rgba[..., 1], rgba[..., 2], rgba[..., 3] = r, g, b, alpha
         images.append(Image.fromarray(rgba, 'RGBA'))
     return images

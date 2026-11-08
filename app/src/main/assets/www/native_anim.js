@@ -240,7 +240,7 @@ export function decodeRect(vram, clut, stp, rgba, x0 = 0, y0 = 0, x1 = 128, y1 =
       const flag = (c & 0x8000) !== 0;
       const o = (y * 128 + x) * 4;
       rgba[o] = r; rgba[o + 1] = g; rgba[o + 2] = b;
-      rgba[o + 3] = (r | g | b) === 0 ? (flag ? 255 : 0) : (flag && stp ? 128 : 255);
+      rgba[o + 3] = flag && stp ? 128 : ((r | g | b) === 0 && !flag ? 0 : 255);   // 0x8000 auf halbtransparenter Fläche: gemischt
     }
   }
   return true;

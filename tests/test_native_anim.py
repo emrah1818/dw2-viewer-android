@@ -76,7 +76,8 @@ def native_model(bones=2, tim=1024, region=None, abr=1):
         for yy in range(y, y + h):
             o = tim + 64 + yy * 64 + x * 2
             data[o:o + w * 2] = bytes([v]) * (w * 2)
-    struct.pack_into('<1024H', data, tim + 0x3840, *([0, 31, 0x8000 | (31 << 5), 31 << 10] + [0] * 1020))
+    struct.pack_into('<1024H', data, tim + 0x3840, *([0, 31, 0x8000 | (31 << 5), 31 << 10, 0x8000] + [0] * 1019))
+    data[tim + 64 + 200 * 64:tim + 64 + 200 * 64 + 4] = b'\x44' * 4     # Schwarz mit STP-Bit (0x8000), Zeile 200
     return bytes(data)
 
 
@@ -186,6 +187,10 @@ def run():
         check(doc['animations'][0]['extras']['loop_row'] == 1 and doc['animations'][1]['extras']['loop_row'] is None, 'Loop-Zeile im glTF')
         imgs = texture_images(native)
         check(len(imgs) == 2, 'Texturen je Material')
+        semi_i = [i for i, m in enumerate(mats) if m['semi_transparent']][0]
+        a_semi = imgs[semi_i].getpixel((0, 200))[3]; a_opaque = imgs[1 - semi_i].getpixel((0, 200))[3]
+        check(a_semi == 127 and a_opaque == 255 and imgs[semi_i].getpixel((0, 0))[3] == 255,
+              '0x8000 (Schwarz+STP) auf halbtransparenter Fläche gemischt, sonst deckend')
         fixture = {'payload': p, 'materials': mats,
                    'images': [base64.b64encode(i.tobytes()).decode() for i in imgs]}
         (ROOT / 'tests' / '_fixture_payload.json').write_text(json.dumps(fixture))
