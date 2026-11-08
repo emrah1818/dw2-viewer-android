@@ -109,13 +109,34 @@ PS1-Mischmodi, Schleifenpunkte oder Scherung ausdrücken; diese Daten wurden des
   gegenüber dem Spielcode. Die Anzeige ist davon nicht betroffen; vor weiterer Nutzung der
   Knochenkorrektur prüfen.
 
+## 6a. Nachtrag: Flackern und „verschobene“ Texturen (Videos vom 8. 11. 2026)
+**Beobachtet** (Myotismon, Wizardmon, Omnimon, P-Mamemon/QKMM, Phantomon, Seraphimon, Rosemon u. a.):
+Umhänge und Mäntel zeigen streifige Mischungen aus Innen- und Außenfarbe, die beim Drehen
+und Animieren flackern; Futterstoffe (z. B. Wizardmons Sternmuster) erscheinen außen.
+
+**Ursache (bestätigt durch den Spielcode):** `Gfx_AddQuadsGT4` und `Gfx_AddTrisGT3` verwerfen
+jede Fläche mit `NCLIP ≤ 0` – die PS1 zeichnet nur Vorderseiten. Umhänge bestehen aus zwei
+deckungsgleichen Schichten (außen und Futter) mit entgegengesetztem Umlaufsinn. Der Viewer
+zeichnete alle Flächen beidseitig; beide Schichten lagen in derselben Tiefe und kämpften im
+Tiefenpuffer (Z-Fighting) → Flackern, falsche bzw. „verschobene“ Texturen.
+
+**Korrektur:** Native Modelle werden wie auf der PS1 nur von vorn gezeichnet. Welche Seite
+vorn ist, prüft der Viewer je Modell anhand der Lichtnormalen der Modelldatei (Umlaufsinn
+gegen Normale); der Konverter-Umlauf (2,1,0) mit D = diag(1,−1,−1) passt dazu. Die Diagnose
+zeigt „Rückseiten: PS1 … x/y Flächen passend“; der Schalter „Nur Vorderseiten zeichnen (PS1)“
+kann es zum Vergleich abschalten. Importierte fremde Modelle bleiben beidseitig.
+
+**Noch offen:** Gleich ausgerichtete, exakt deckungsgleiche Flächen (Aufkleber auf Flächen)
+sortiert die PS1 per Ordnungstabelle; mit Tiefenpuffer könnten dort vereinzelt noch
+Überlagerungen flackern. Bitte melden, falls nach diesem Build noch Stellen auffallen.
+
 ## 7. Tests (alle erfolgreich)
 - `tests/test_native_anim.py` – 26 Prüfungen (Spielformat: Lücke, Loop, Halten, Scherung,
   texAnimParts, ABR, MODELDT-Zuordnung inkl. geteilter Animation, Nutzlast, Prüfung, ZIP).
-- `tests/test_native_anim.mjs` – 21 Prüfungen der JS-Wiedergabe (30 Hz, Loop ab Zeile 1,
+- `tests/test_native_anim.mjs` – 24 Prüfungen der JS-Wiedergabe (inkl. Umlaufsinn/Vorderseite) (30 Hz, Loop ab Zeile 1,
   Halten/Neustart, D·M·D-Matrizen mit Scherung, Dekodierung identisch zu Python,
   Zyklus 8/16/24 VBlanks, Blinzelablauf 47/51, Augen-zu-Regel, erweiterte Phase).
-- `tests/e2e_anim.py` – 22 Schritte im echten Browser (Auswahl, Loop, Pause/Fortsetzen,
+- `tests/e2e_anim.py` – 24 Schritte im echten Browser (Auswahl, Loop, Pause/Fortsetzen,
   Geschwindigkeit 0,5×/2×, Wechsel, Halten, Diagnose, Kanalschalter, Digimon-Wechsel,
   geteilte Animation, Prüfdialog, Export, keine JS-Fehler).
 - Regression: `test_android_api.py`, `test_android_edit.py` (35), `e2e_ui.py` (20/20).

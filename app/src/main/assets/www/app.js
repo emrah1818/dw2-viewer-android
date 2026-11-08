@@ -202,7 +202,7 @@ $('#play').onclick = () => {
 };
 $('#o-smooth').onchange = e => { view.smooth = e.target.checked; };
 $('#o-repeat').onchange = e => { view.repeatOnce = e.target.checked; };
-for (const [id, ch] of [['#c-bones', 'bones'], ['#c-cycles', 'cycles'], ['#c-extended', 'extended'], ['#c-blend', 'blend']]) {
+for (const [id, ch] of [['#c-bones', 'bones'], ['#c-cycles', 'cycles'], ['#c-extended', 'extended'], ['#c-blend', 'blend'], ['#c-cull', 'cull']]) {
   $(id).onchange = e => view.setChannel(ch, e.target.checked);
 }
 function animStatus() {
@@ -227,7 +227,7 @@ function renderDiag(info) {
     [t('Zuordnung'), src?.source === 'MODELDT' ? t('Spieltabelle MODELDT') : t('Dateiname')],
     [t('Geteilte Animationen'), shared.join(', ') || '–'],
     [t('Augen'), c.eyes], [t('Texturzyklen'), c.cycles], [t('Erweiterte Texturanimation'), c.extended],
-    [t('Palettenzeilen betroffen'), c.palette ? t('ja') : t('nein')], [t('Halbtransparenz'), c.semi],
+    [t('Palettenzeilen betroffen'), c.palette ? t('ja') : t('nein')], [t('Halbtransparenz'), c.semi], [t('Rückseiten'), c.culling],
   ];
   if (c.legacy) rows.push([t('Hinweis'), t('{n} Clips nur tolerant lesbar', { n: c.legacy })]);
   el.innerHTML = rows.map(([k, v]) => `<div><b>${esc(k)}:</b> ${esc(String(v))}</div>`).join('') +

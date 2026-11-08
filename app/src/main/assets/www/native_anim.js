@@ -245,3 +245,21 @@ export function decodeRect(vram, clut, stp, rgba, x0 = 0, y0 = 0, x1 = 128, y1 =
   }
   return true;
 }
+
+/** Zählt Dreiecke, deren Umlaufsinn zur Lichtnormale passt (Vorderseite = Normale zeigt nach außen). */
+export function faceOrientation(meshes) {
+  let agree = 0, disagree = 0;
+  for (const o of meshes) {
+    const pos = o.geometry?.attributes?.position, nor = o.geometry?.attributes?.normal;
+    if (!pos || !nor || o.geometry.index) continue;
+    const p = pos.array, q = nor.array;
+    for (let i = 0; i + 8 < p.length; i += 9) {
+      const ax = p[i + 3] - p[i], ay = p[i + 4] - p[i + 1], az = p[i + 5] - p[i + 2];
+      const bx = p[i + 6] - p[i], by = p[i + 7] - p[i + 1], bz = p[i + 8] - p[i + 2];
+      const cx = ay * bz - az * by, cy = az * bx - ax * bz, cz = ax * by - ay * bx;
+      const d = cx * (q[i] + q[i + 3] + q[i + 6]) + cy * (q[i + 1] + q[i + 4] + q[i + 7]) + cz * (q[i + 2] + q[i + 5] + q[i + 8]);
+      if (d > 0) agree++; else if (d < 0) disagree++;
+    }
+  }
+  return { agree, disagree };
+}

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { OBJLoader } from 'three/addons/loaders/OBJLoader.js';
-import { AnimFile, BonePlayer, TexAnimator, decodeRect, fromBase64, glMatrix, MAX_DELTA } from './native_anim.js';
+import { AnimFile, BonePlayer, TexAnimator, decodeRect, fromBase64, glMatrix, faceOrientation, MAX_DELTA } from './native_anim.js';
 
 /** PS1-Mischmodi (tpage ABR) für halbtransparente Texel. */
 const ABR_LABEL = ['50 % (B/2+F/2)', 'additiv (B+F)', 'subtraktiv (B−F)', 'B+F/4'];
@@ -31,7 +31,7 @@ export class Viewer {
     this.mixer = null; this.actions = []; this.model = null;
     this.playing = true; this.speed = 1; this.nearest = true; this.wire = false; this.token = 0;
     // Originalgetreue Kanäle (Diagnosemodus kann einzelne abschalten)
-    this.channels = { bones: true, blink: true, cycles: true, extended: true, blend: true };
+    this.channels = { bones: true, blink: true, cycles: true, extended: true, blend: true, cull: true };
     this.smooth = false;        // Glättung zwischen 30-Hz-Zeilen (nicht original)
     this.repeatOnce = false;    // Einmal-Animationen nach kurzer Pause neu starten (nicht original)
     this.native = null;
@@ -138,6 +138,10 @@ export class Viewer {
     const byMat = new Map();
     const meshes = [];
     this.model.traverse(o => { if (o.isMesh && !o.userData.dw2Twin) meshes.push(o); });
+    n.orientation = faceOrientation(meshes);
+    // PS1 zeichnet nur Vorderseiten (Gfx_AddQuadsGT4/Gfx_AddTrisGT3: NCLIP, opz <= 0 → verworfen).
+    // Welche Seite vorn ist, folgt aus der Lage der Lichtnormalen der Modelldatei.
+    n.cullSide = n.orientation.agree >= n.orientation.disagree ? THREE.FrontSide : THREE.BackSide;
     meshes.forEach(o => {
       const m = o.material;
       if (!m || m.userData?.clut === undefined) return;
@@ -274,6 +278,7 @@ export class Viewer {
     }
     if (name === 'blend') n.semi.forEach(m => this.setBlend(m, m.userData.abr));
     if (name === 'bones' && on) this.applyPose(true);
+    if (name === 'cull') this.applyMaterial();
   }
 
   /** Zustand für die Anzeige unter der Animationsauswahl. */
@@ -300,6 +305,7 @@ export class Viewer {
       loops: p.anims.filter(a => a.terminator === 0xFE).length, holds: p.anims.filter(a => a.terminator === 0xFF).length,
       legacy: p.anims.filter(a => a.legacy).length,
       eyes: t.eyes || 0, cycles: t.cycles || 0, extended: t.extended || 0, palette: !!t.palette,
+      culling: `${this.channels.cull ? 'PS1 (nur Vorderseiten)' : 'aus (beidseitig)'} · ${n.orientation.agree}/${n.orientation.agree + n.orientation.disagree} Flächen passend${n.cullSide === THREE.BackSide ? ' · Umlauf gespiegelt' : ''}`,
       semi: Object.entries(abr).map(([k, v]) => `${ABR_LABEL[k] || k} ×${v}`).join(', ') || '–',
       warnings: [...(t.warnings || []), ...Object.entries(p.file_warnings || {}).flatMap(([k, w]) => w.map(x => `${k}: ${x}`)),
         ...Object.entries(p.skipped || {}).map(([k, w]) => `${k}: übersprungen (${w})`),
@@ -340,7 +346,8 @@ export class Viewer {
     this.model.traverse(o => {
       if (!o.isMesh) return;
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
-        m.side = THREE.DoubleSide;
+        const native = this.native && m.userData?.clut !== undefined;
+        m.side = native && this.channels.cull ? this.native.cullSide : THREE.DoubleSide;
         const pass = m.userData?.dw2Pass;
         if (pass === 'opaque') {
           // Undurchsichtige Texel halbtransparenter Flächen; die STP-Texel zeichnet der Zwilling.
@@ -359,3 +366,4 @@ export class Viewer {
   setLight(v) { this.key.intensity = v; this.ambient.intensity = 0.4 + v * 0.4; }
   setBackground(hex) { this.scene.background = new THREE.Color(hex); }
 }
+

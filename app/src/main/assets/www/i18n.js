@@ -180,4 +180,6 @@ export const EN = {
   "Dauer (s)": "Duration (s)",
   "Schließen": "Close",
   "Bericht exportieren": "Export report",
+  "Nur Vorderseiten zeichnen (PS1)": "Draw front faces only (PS1)",
+  "Rückseiten": "Back faces",
 };

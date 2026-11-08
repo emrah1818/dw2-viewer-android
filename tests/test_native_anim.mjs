@@ -2,7 +2,7 @@
 // mit der vom Python-Konverter erzeugten Nutzlast. Aufruf (nach dem Python-Test):
 //   node tests/test_native_anim.mjs
 import { readFileSync } from 'node:fs';
-import { AnimFile, BonePlayer, TexAnimator, decodeRect, fromBase64, glMatrix, VRAM_W } from '../app/src/main/assets/www/native_anim.js';
+import { AnimFile, BonePlayer, TexAnimator, decodeRect, fromBase64, glMatrix, faceOrientation, VRAM_W } from '../app/src/main/assets/www/native_anim.js';
 
 const fx = JSON.parse(readFileSync(new URL('./_fixture_payload.json', import.meta.url)));
 const p = fx.payload;
@@ -82,6 +82,15 @@ t4.frame(2, 0);
 check(t4.anim.extended[0].timer === 0, 'Erweitert: (4 + 2) mod 6 = 0');
 t4.reset();
 check(t4.anim.extended[0].timer === 3 && t4.vram.every((v, i) => v === t4.original[i]), 'Reset stellt Textur und Phase her');
+
+// ---- Vorderseite: Umlaufsinn gegen Lichtnormale (Grundlage für das PS1-Backface-Culling)
+const tri = (pts, nz) => ({ geometry: { attributes: { position: { array: new Float32Array(pts) }, normal: { array: new Float32Array([0, 0, nz, 0, 0, nz, 0, 0, nz]) } } } });
+const ccw = [0, 0, 0, 1, 0, 0, 0, 1, 0];   // Normale des Umlaufs: +z
+check(JSON.stringify(faceOrientation([tri(ccw, 1)])) === '{"agree":1,"disagree":0}', 'Umlauf passt zur Normale → Vorderseite');
+check(JSON.stringify(faceOrientation([tri(ccw, -1), tri(ccw, -1), tri(ccw, 1)])) === '{"agree":1,"disagree":2}', 'Gespiegelter Umlauf wird erkannt');
+// Konverter-Ausgabe (Fixture-Quad: PS1-Normale +z, nach D → −z) ist stimmig
+const conv = [0, 20, 0, 20, 0, 0, 0, 0, 0];   // Reihenfolge (2,1,0) wie native_gltf
+check(faceOrientation([tri(conv, -1)]).agree === 1, 'Konverter-Umlauf (2,1,0) + D passt zur PS1-Normale');
 
 if (fails) { console.error(`${fails} Prüfungen fehlgeschlagen`); process.exit(1); }
 console.log('Alle JS-Animationstests bestanden');
