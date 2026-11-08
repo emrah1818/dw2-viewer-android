@@ -6,7 +6,7 @@
 2. "uploading an existing file" wählen und den **Inhalt** dieses Ordners hochladen (alle Dateien und Ordner, auch `.github`).
    Tipp: Am PC per Drag & Drop; der Ordner `.github` muss mit hochgeladen werden.
 3. Reiter **Actions** öffnen → "Android APK - DW2 3D Viewer" → **Run workflow**. Der Build dauert ca. 10–15 Minuten.
-4. Danach unter **Releases → v5.1** die Datei `DW2_3D_Viewer_v5.1.apk` direkt auf dem Handy herunterladen.
+4. Danach unter **Releases → v5.1.1** die Datei `DW2_3D_Viewer_v5.1.1.apk` direkt auf dem Handy herunterladen.
 5. Antippen → Installation aus dieser Quelle erlauben → installieren.
 
 Jede Änderung, die du hochlädst, baut automatisch eine neue Test-APK.

@@ -9,7 +9,7 @@ Synthetische Daten im Spielformat (keine Spieldaten). Prüft:
   * frühere tolerante Lesart bleibt als Rückfall erhalten
 Aufruf: python tests/test_native_anim.py   (schreibt zusätzlich tests/_fixture_payload.json für den JS-Test)
 """
-import base64, json, os, shutil, struct, sys, tempfile
+import base64, io, json, os, shutil, struct, sys, tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -43,7 +43,7 @@ def tex_region():
     return eye0 + eye1 + cycle + b'\xfe' + bytes(ext) + b'\xff'
 
 
-def native_model(bones=2, tim=1024, region=None, abr=1):
+def native_model(bones=2, tim=1024, region=None, abr=1, clut=224 * 64):
     region = tex_region() if region is None else region
     start = 12 + 16 * bones
     begin = (start + max(24, len(region)) + 3) // 4 * 4
@@ -64,7 +64,7 @@ def native_model(bones=2, tim=1024, region=None, abr=1):
         else:
             struct.pack_into('<II', data, cursor, 0, 1); p = cursor + 8
         data[p:p + 8] = bytes([0, 1, 2, 3, 0, 0, 0, 0]); data[p + 8:p + 16] = bytes([0, 0, 7, 0, 0, 3, 7, 3])
-        struct.pack_into('<HH', data, p + 16, 224 * 64, (abr << 5) if semi else 0)
+        struct.pack_into('<HH', data, p + 16, clut, (abr << 5) if semi else 0)
         struct.pack_into('<III', data, p + 20, 0, 0, 0) if semi else struct.pack_into('<II', data, p + 20, 0, 0); cursor += 36
     for i, table in enumerate(pointers):
         struct.pack_into(f'<{bones}I', data, 12 + i * bones * 4, *table)
@@ -79,6 +79,20 @@ def native_model(bones=2, tim=1024, region=None, abr=1):
     struct.pack_into('<1024H', data, tim + 0x3840, *([0, 31, 0x8000 | (31 << 5), 31 << 10, 0x8000] + [0] * 1019))
     data[tim + 64 + 200 * 64:tim + 64 + 200 * 64 + 4] = b'\x44' * 4     # Schwarz mit STP-Bit (0x8000), Zeile 200
     return bytes(data)
+
+
+def small_tim_shadow():
+    """Schattenmodell wie 0x5B: kleine 4-Bit-TIM (32×32), Palette in Zeile 31, Schwarz mit STP-Bit."""
+    m = bytearray(native_model(bones=1, region=bytes([0xFF] * 24), abr=0, clut=31 * 64))
+    tim = struct.unpack_from('<I', m, 0)[0]
+    w, h = 8, 32
+    pix = bytearray(b'\x11' * (w * h * 2))
+    struct.pack_into('<2H', pix, 31 * w * 2, 0, 0x8000)          # Palette: 0 = durchsichtig, 1 = Schwarz+STP
+    block = struct.pack('<II', 16, 8) + struct.pack('<I4H', 44, 0, 0, 16, 1) + bytes(32) \
+        + struct.pack('<I4H', 12 + len(pix), 0, 0, w, h) + bytes(pix)
+    m[tim:tim + len(block)] = block
+    struct.pack_into('<I', m, 4, tim + len(block))
+    return bytes(m[:tim + len(block)])
 
 
 def game_animation(bones=2):
@@ -117,7 +131,7 @@ def make_iso(folder):
              'MODELDT0.BIN': modeldt([(3, 'Agumon', ids['M003AGUM.BIN'], [ids['A003AGUM.BIN'], ids['B003AGUM.BIN']]),
                                       (4, 'Betamon', ids['M004BETA.BIN'], [ids['A003AGUM.BIN']])])}
     # Schattenmodell (Datei-ID 0x5B) und SLUS_011.93 mit privater Dateitabelle (wie Cd_GetFileLba)
-    shadow = native_model(bones=1, region=bytes([0xFF] * 24), abr=0)
+    shadow = small_tim_shadow()
     exe = bytearray(0x37900 + 3675 * 2); exe[:8] = b'PS-X EXE'
     files = {'SHADOW.BIN': shadow, **files, 'SLUS_011.93': exe}
     struct.pack_into('<I', exe, 0x33F94 + 4 * 0x5B, 20); struct.pack_into('<H', exe, 0x37900 + 2 * 0x5B, (len(shadow) + 2047) // 2048)
@@ -216,7 +230,13 @@ def run():
         check(g4['scenes'][0]['extras']['dw2_native']['texanim']['eyes'] == 0 and
               {m['extras']['abr'] for m in g4['materials'] if m['extras']['semi_transparent']} == {2}, 'Betamon: eigene Textur/ABR, keine Texturanimation')
         sh = m3.get('shadow')
-        check(sh and json.loads((tmp / 'files/viewer' / sh).read_text())['meshes'], 'Schattenmodell 0x5B über die Dateitabelle gelesen')
+        check(sh and json.loads((tmp / 'files/viewer' / sh).read_text())['meshes'] and not m3.get('shadow_error'),
+              'Schattenmodell 0x5B (kleine 32×32-TIM) über die Dateitabelle gelesen')
+        from PIL import Image as _I
+        sdoc = json.loads((tmp / 'files/viewer' / sh).read_text())
+        spng = _I.open(io.BytesIO(base64.b64decode(sdoc['images'][0]['uri'].split(',', 1)[1])))
+        check(spng.size == (128, 256) and spng.getpixel((0, 0))[3] > 0 and spng.getpixel((0, 0))[:3] == (0, 0, 0)
+              and spng.getpixel((100, 100))[3] == 0, 'Schattentextur: schwarz, außerhalb der kleinen TIM durchsichtig')
         audit = ok('animation_audit')
         s = audit['summary']
         check(s['models'] == 2 and s['errors'] == 0 and s['with_tex_cycles'] == 1 and s['with_shared_anims'] == 1

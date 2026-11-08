@@ -132,19 +132,34 @@ def _trs(matrix):
 
 
 def _tim(native, model):
+    """TIM der Modelldatei als Abbild des 32×256-Wort-Texturplatzes (Gfx_LoadTexSlotImage).
+
+    Normale Digimon-Modelle haben genau 128×256 Pixel (4 Bit). Kleinere 4-Bit-TIMs (z. B. das
+    Schattenmodell 0x5B) liegen wie im VRAM oben links im Platz; Paletten stehen im Bild selbst,
+    weil das Spiel den CLUT-Block bei 4 Bit nicht lädt.
+    Rückgabe: Indizes (256×128) und alle 8192 Wörter des Platzes.
+    """
     t = model.tim_start
-    if t + 0x4040 > len(native) or struct.unpack_from('<II', native, t) != (16, 8) \
-            or struct.unpack_from('<I', native, t + 52)[0] != 16396 or struct.unpack_from('<HH', native, t + 60) != (32, 256):
-        raise ValueError('Nicht unterstützte DW2-TIM-Struktur (erwartet 128×256, 4 Bit).')
-    # Wie der Original-Konverter: alle 256 Zeilen als Pixel lesen. Die unteren 32
-    # Zeilen enthalten zugleich die Paletten, werden aber von manchen Flächen als
-    # Farbquelle benutzt (einfarbige Teile). Sie durchsichtig zu lassen erzeugt Löcher.
-    raw = np.frombuffer(native, dtype=np.uint8, count=0x4040 - 64, offset=t + 64)
-    indices = np.empty(raw.size * 2, dtype=np.uint8)
-    indices[0::2] = raw & 15
-    indices[1::2] = raw >> 4
-    words = np.frombuffer(native, dtype='<u2', count=1024, offset=t + 0x4040 - 2048)
-    return indices.reshape(256, 128), words
+    if t + 20 > len(native) or struct.unpack_from('<I', native, t)[0] != 16:
+        raise ValueError('Keine TIM-Datei im Modell.')
+    flags = struct.unpack_from('<I', native, t + 4)[0]
+    if flags & 7:
+        raise ValueError('Nur 4-Bit-Modelltexturen werden unterstützt.')
+    img = t + 8 + (struct.unpack_from('<I', native, t + 8)[0] if flags & 8 else 0)
+    if img + 12 > len(native):
+        raise ValueError('TIM-Bildblock fehlt.')
+    w, h = struct.unpack_from('<HH', native, img + 8)
+    if not (1 <= w <= 32 and 1 <= h <= 256) or img + 12 + w * h * 2 > len(native):
+        raise ValueError(f'Nicht unterstützte DW2-TIM-Größe {w * 4}×{h}.')
+    words = np.zeros((256, 32), dtype='<u2')
+    words[:h, :w] = np.frombuffer(native, dtype='<u2', count=w * h, offset=img + 12).reshape(h, w)
+    raw = words.view(np.uint8).reshape(256, 64)
+    # Wie der Original-Konverter: alle Zeilen als Pixel lesen (auch die Palettenzeilen,
+    # manche Flächen nutzen sie als Farbquelle).
+    indices = np.empty((256, 128), dtype=np.uint8)
+    indices[:, 0::2] = raw & 15
+    indices[:, 1::2] = raw >> 4
+    return indices, words.reshape(-1)
 
 
 def material_keys(model, native=None):
@@ -168,9 +183,9 @@ def texture_images(native, indices=None):
     images = []
     for stp, clut, _abr in material_keys(model, native):
         x, y = (clut & 63) * 16, (clut >> 6) & 1023
-        if x not in (0, 16) or not 224 <= y < 256:
+        if x not in (0, 16) or not 0 <= y < 256:
             raise ValueError(f'Unbekannte DW2-CLUT 0x{clut:04X}.')
-        bank = (y - 224) * 32 + (clut & 63) * 16
+        bank = y * 32 + x
         w = words[bank + indices.astype(np.int32)].astype(np.uint32)
         rgba = np.zeros((256, 128, 4), dtype=np.uint8)
         r, g, b = (((w >> sh) & 31) * 8 for sh in (0, 5, 10))
@@ -322,7 +337,7 @@ def native_payload(native, model, depths, clips, raw_anims, skipped=None):
             'files': {p: base64.b64encode(d).decode() for p, d in raw_anims.items()},
             'file_warnings': {p: a.warnings for p, a in clips.items() if a.warnings},
             'skipped': skipped or {}, 'anims': anims,
-            'vram': base64.b64encode(native[tim + 64:tim + 64 + 0x4000]).decode(),
+            'vram': base64.b64encode(_tim(native, model)[1].tobytes()).decode(),
             'texanim': tex_info}
 
 

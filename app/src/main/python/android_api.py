@@ -496,7 +496,7 @@ def prepare_model(identifier, original=False):
         animations = []
     return {'url': model.relative_to(CACHE).as_posix(), 'name': c.name, 'id': c.id, 'code': c.code,
             'animations': animations, 'anim_source': family, 'edited': edited, 'original': bool(original),
-            'shadow': _shadow_url(),
+            **dict(zip(('shadow', 'shadow_error'), _shadow_url())),
             'seconds': round(time.perf_counter() - started, 2)}
 
 
@@ -527,7 +527,7 @@ def _private_file(file_id):
 
 
 def _shadow_url():
-    """Schattenmodell des Spiels (Datei 0x5B) als glTF; None, wenn es nicht lesbar ist."""
+    """Schattenmodell des Spiels (Datei 0x5B) als glTF: (url, None) oder (None, Grund)."""
     from dw2studio.core.native_gltf import convert_model
     from dw2studio.core.native_model import NativeModel
     target = CACHE / 'models' / CONVERTER_VERSION / S.index_key / 'shadow' / 'shadow.gltf'
@@ -537,12 +537,12 @@ def _shadow_url():
             NativeModel(native)
             target.parent.mkdir(parents=True, exist_ok=True)
             convert_model(native, {}, target)
-        return target.relative_to(CACHE).as_posix()
-    except ValueError:
-        return None      # kein US-Image mit Dateitabelle: ohne Schatten anzeigen
-    except Exception:
-        traceback.print_exc()
-        return None
+        return target.relative_to(CACHE).as_posix(), None
+    except Exception as exc:     # ohne Schatten anzeigen, Grund in der Diagnose
+        if not isinstance(exc, ValueError):
+            traceback.print_exc()
+        return None, f'{exc.__class__.__name__}: {exc}'
+
 
 
 # --------------------------------------------------------------------------- Animations-Prüfung

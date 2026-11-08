@@ -186,4 +186,6 @@ export const EN = {
   "Hintergrund-Tempo": "Background speed",
   "Hintergrundfarbe (ohne Original-Hintergrund)": "Background colour (without original background)",
   "Schatten unter dem Digimon (Original)": "Shadow under the Digimon (original)",
+  "Schatten": "Shadow",
+  "Originalmodell 0x5B": "original model 0x5B",
 };

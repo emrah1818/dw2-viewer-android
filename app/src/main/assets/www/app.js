@@ -178,6 +178,7 @@ async function loadModel(id) {
       : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
     if (info.shadow) view.setShadow(BASE + info.shadow).catch(e => log('Schatten: ' + e.message));
+    else if (info.shadow_error) log('Schatten: ' + info.shadow_error);
     renderDiag(info);
     log(`${info.name}: ${t('geladen')} (${info.seconds} s)`);
     prefetchNeighbours(id);
@@ -229,6 +230,7 @@ function renderDiag(info) {
     [t('Geteilte Animationen'), shared.join(', ') || '–'],
     [t('Augen'), c.eyes], [t('Texturzyklen'), c.cycles], [t('Erweiterte Texturanimation'), c.extended],
     [t('Palettenzeilen betroffen'), c.palette ? t('ja') : t('nein')], [t('Halbtransparenz'), c.semi], [t('Rückseiten'), c.culling],
+    [t('Schatten'), info?.shadow ? t('Originalmodell 0x5B') : (info?.shadow_error || '–')],
   ];
   if (c.legacy) rows.push([t('Hinweis'), t('{n} Clips nur tolerant lesbar', { n: c.legacy })]);
   el.innerHTML = rows.map(([k, v]) => `<div><b>${esc(k)}:</b> ${esc(String(v))}</div>`).join('') +

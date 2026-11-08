@@ -381,7 +381,8 @@ export class Viewer {
     sh.traverse(o => {
       if (!o.isMesh) return;
       const m = o.material.clone();
-      m.transparent = false; m.alphaTest = 0.5; m.depthWrite = false; m.side = THREE.DoubleSide;
+      // Modus 1 = undurchsichtig: auch STP-Texel (Alpha 127) deckend zeichnen, nur 0x0000 ist durchsichtig.
+      m.transparent = false; m.alphaTest = 0.25; m.depthWrite = false; m.side = THREE.DoubleSide;
       m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 4;
       if (m.map) this.filter(m.map);
       o.material = m; o.renderOrder = -1; o.userData.dw2Shadow = true;
