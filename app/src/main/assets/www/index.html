@@ -34,7 +34,7 @@
   </section>
 
   <section id="page-view" class="page">
-    <div id="stage"><div class="dw2bg" id="dw2bg"><div class="l1"></div><div class="l2l"></div><div class="l2r"></div><div class="l3"></div></div><canvas id="gl"></canvas><div class="dw2frame stage-frame"></div><div id="stage-msg"></div></div>
+    <div id="stage"><div class="dw2bg" id="dw2bg"><div class="l1"></div><div class="l2l"></div><div class="l2r"></div><div class="l3"></div></div><div class="stage-panel"></div><div class="dw2frame stage-frame"></div><canvas id="gl"></canvas><div id="stage-msg"></div></div>
     <div id="viewbar" class="dw2win dw2frame">
       <button id="v-prev" aria-label="Zurück">◀</button>
       <div id="v-name">–</div>
@@ -59,6 +59,7 @@
       <label class="row"><input type="checkbox" id="o-smooth"> <span data-i18n="Bewegung glätten (nicht original, Spiel: 30 Bilder/s)">Bewegung glätten (nicht original, Spiel: 30 Bilder/s)</span></label>
       <label class="row"><input type="checkbox" id="o-repeat"> <span data-i18n="Einmal-Animationen wiederholen (nicht original)">Einmal-Animationen wiederholen (nicht original)</span></label>
       <label class="row"><input type="checkbox" id="o-dw2bg" checked> <span data-i18n="Original-Hintergrund (Digimon World 2)">Original-Hintergrund (Digimon World 2)</span></label>
+      <label class="row"><input type="checkbox" id="o-shadow" checked> <span data-i18n="Schatten unter dem Digimon (Original)">Schatten unter dem Digimon (Original)</span></label>
       <label class="row"><span data-i18n="Hintergrund-Tempo">Hintergrund-Tempo</span> <input type="range" id="o-dw2speed" min="0.25" max="2" step="0.05" value="1"></label>
       <label class="row"><input type="checkbox" id="o-grid"> <span data-i18n="Boden-Raster">Boden-Raster</span></label>
       <label class="row"><input type="checkbox" id="o-wire"> <span data-i18n="Drahtgitter">Drahtgitter</span></label>

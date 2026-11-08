@@ -185,4 +185,5 @@ export const EN = {
   "Original-Hintergrund (Digimon World 2)": "Original background (Digimon World 2)",
   "Hintergrund-Tempo": "Background speed",
   "Hintergrundfarbe (ohne Original-Hintergrund)": "Background colour (without original background)",
+  "Schatten unter dem Digimon (Original)": "Shadow under the Digimon (original)",
 };

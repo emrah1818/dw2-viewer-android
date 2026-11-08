@@ -496,7 +496,53 @@ def prepare_model(identifier, original=False):
         animations = []
     return {'url': model.relative_to(CACHE).as_posix(), 'name': c.name, 'id': c.id, 'code': c.code,
             'animations': animations, 'anim_source': family, 'edited': edited, 'original': bool(original),
+            'shadow': _shadow_url(),
             'seconds': round(time.perf_counter() - started, 2)}
+
+
+# --------------------------------------------------------------------------- Schatten (Originalmodell)
+SHADOW_FILE_ID = 0x5B   # main/shadow.c Gfx_ShadowUpdate: Gfx_AttachModel(actor, 0x5B), Boden y 0 unter Knochen 0
+
+
+def _private_file(file_id):
+    """Datei über die private US-Dateitabelle in SLUS_011.93 lesen (wie Cd_GetFileLba)."""
+    from dw2studio.core.disc import Disc
+    s = _need_session()
+    exe = [e for e in S.entries if not e.directory and _basename(e) == 'SLUS_011.93']
+    if len({(e.lba, e.size) for e in exe}) != 1:
+        raise ValueError('SLUS_011.93 nicht eindeutig gefunden.')
+    data = s.current(exe[0])
+    count, lba_base, size_base = 3675, 0x33F94, 0x37900
+    if not data.startswith(b'PS-X EXE') or len(data) < size_base + count * 2 or not 0 <= file_id < count:
+        raise ValueError('US-Dateitabelle in SLUS_011.93 nicht erkannt.')
+    lba = struct.unpack_from('<I', data, lba_base + 4 * file_id)[0]
+    sectors = struct.unpack_from('<H', data, size_base + 2 * file_id)[0]
+    if not sectors:
+        raise ValueError(f'Datei {file_id} ist leer.')
+    disc = Disc(S.image_path)
+    try:
+        return disc.read(lba, sectors * 2048)
+    finally:
+        disc.close()
+
+
+def _shadow_url():
+    """Schattenmodell des Spiels (Datei 0x5B) als glTF; None, wenn es nicht lesbar ist."""
+    from dw2studio.core.native_gltf import convert_model
+    from dw2studio.core.native_model import NativeModel
+    target = CACHE / 'models' / CONVERTER_VERSION / S.index_key / 'shadow' / 'shadow.gltf'
+    try:
+        if not target.is_file():
+            native = _private_file(SHADOW_FILE_ID)
+            NativeModel(native)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            convert_model(native, {}, target)
+        return target.relative_to(CACHE).as_posix()
+    except ValueError:
+        return None      # kein US-Image mit Dateitabelle: ohne Schatten anzeigen
+    except Exception:
+        traceback.print_exc()
+        return None
 
 
 # --------------------------------------------------------------------------- Animations-Prüfung

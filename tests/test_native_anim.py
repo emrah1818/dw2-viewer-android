@@ -116,7 +116,12 @@ def make_iso(folder):
              'B003AGUM.BIN': legacy_animation(), 'M004BETA.BIN': native_model(region=bytes([0xFF] * 20) + b'\xff\xff\xff\xff', abr=2),
              'MODELDT0.BIN': modeldt([(3, 'Agumon', ids['M003AGUM.BIN'], [ids['A003AGUM.BIN'], ids['B003AGUM.BIN']]),
                                       (4, 'Betamon', ids['M004BETA.BIN'], [ids['A003AGUM.BIN']])])}
-    sectors = [bytearray(2048) for _ in range(120)]
+    # Schattenmodell (Datei-ID 0x5B) und SLUS_011.93 mit privater Dateitabelle (wie Cd_GetFileLba)
+    shadow = native_model(bones=1, region=bytes([0xFF] * 24), abr=0)
+    exe = bytearray(0x37900 + 3675 * 2); exe[:8] = b'PS-X EXE'
+    files = {'SHADOW.BIN': shadow, **files, 'SLUS_011.93': exe}
+    struct.pack_into('<I', exe, 0x33F94 + 4 * 0x5B, 20); struct.pack_into('<H', exe, 0x37900 + 2 * 0x5B, (len(shadow) + 2047) // 2048)
+    sectors = [bytearray(2048) for _ in range(300)]
     root = dir_record('\x00', 18, 2048, True) + dir_record('\x01', 18, 2048, True)
     lba = 20
     for name, data in files.items():
@@ -210,6 +215,8 @@ def run():
         g4 = json.loads((tmp / 'files/viewer' / m4['url']).read_text())
         check(g4['scenes'][0]['extras']['dw2_native']['texanim']['eyes'] == 0 and
               {m['extras']['abr'] for m in g4['materials'] if m['extras']['semi_transparent']} == {2}, 'Betamon: eigene Textur/ABR, keine Texturanimation')
+        sh = m3.get('shadow')
+        check(sh and json.loads((tmp / 'files/viewer' / sh).read_text())['meshes'], 'Schattenmodell 0x5B über die Dateitabelle gelesen')
         audit = ok('animation_audit')
         s = audit['summary']
         check(s['models'] == 2 and s['errors'] == 0 and s['with_tex_cycles'] == 1 and s['with_shared_anims'] == 1

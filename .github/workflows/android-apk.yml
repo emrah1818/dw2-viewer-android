@@ -46,10 +46,11 @@ jobs:
 
       - name: Build-Kennung
         run: |
+          VER=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
           if [ "$GITHUB_REF_NAME" = "main" ]; then
-            echo "APK_NAME=DW2_3D_Viewer_v5.0.apk" >> "$GITHUB_ENV"
-            echo "REL_TAG=v5.0" >> "$GITHUB_ENV"
-            echo "REL_NAME=DW2 Mobile 3D Viewer v5.0 – Original Background Animation" >> "$GITHUB_ENV"
+            echo "APK_NAME=DW2_3D_Viewer_v$VER.apk" >> "$GITHUB_ENV"
+            echo "REL_TAG=v$VER" >> "$GITHUB_ENV"
+            echo "REL_NAME=DW2 Mobile 3D Viewer v$VER" >> "$GITHUB_ENV"
             echo "REL_PRE=false" >> "$GITHUB_ENV"
           else
             echo "APK_NAME=DW2_3D_Viewer_v4.2_Full_Animation_Support_test.apk" >> "$GITHUB_ENV"
@@ -76,7 +77,7 @@ jobs:
           name: DW2-3D-Viewer-test-apk
           path: ${{ env.APK_NAME }}
 
-      - name: APK als Release veröffentlichen (main = v5.0, sonst Test-Build)
+      - name: APK als Release veröffentlichen (main = Version aus build.gradle.kts, sonst Test-Build)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.REL_TAG }}
@@ -86,7 +87,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: ${{ env.APK_NAME }}
           body: |
-            ${{ env.REL_PRE == 'false' && 'Version 5.0 – vollständige Animationsunterstützung, PS1-Darstellung (Rückseiten, Mischmodi), adaptives App-Symbol und Original-Hintergrund von Digimon World 2. Auf dem Handy herunterladen und installieren.' || format('Automatischer Test-Build ({0}, {1}). Keine finale Veröffentlichung.', github.ref_name, github.sha) }}
+            ${{ env.REL_PRE == 'false' && 'Vollständige Animationsunterstützung, PS1-Darstellung (Rückseiten, Mischmodi), adaptives App-Symbol, Original-Hintergrund von Digimon World 2 mit grünem Statusfenster und Original-Schatten. Auf dem Handy herunterladen und installieren.' || format('Automatischer Test-Build ({0}, {1}). Keine finale Veröffentlichung.', github.ref_name, github.sha) }}
 
       # Für die Veröffentlichung: signiertes Release-Bundle, nur wenn die Secrets gesetzt sind.
       - name: Release-Signatur vorbereiten

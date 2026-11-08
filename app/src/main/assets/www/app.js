@@ -177,6 +177,7 @@ async function loadModel(id) {
       ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('')
       : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
+    if (info.shadow) view.setShadow(BASE + info.shadow).catch(e => log('Schatten: ' + e.message));
     renderDiag(info);
     log(`${info.name}: ${t('geladen')} (${info.seconds} s)`);
     prefetchNeighbours(id);
@@ -254,6 +255,7 @@ function applyDw2Background() {
   $('#stage').classList.toggle('dw2off', !on);
   $('#stage').style.setProperty('--dw2speed', speed);
   view.setOriginalBackground(on);
+  $('#o-shadow').checked = prefs.shadow !== false; view.setShadowVisible(prefs.shadow !== false);
 }
 /** Spielpixel auf ganze Gerätepixel runden: etwa 260 Spielpixel über die Bühnenbreite (Original: 320). */
 function sizeDw2Pixels() {
@@ -263,6 +265,7 @@ function sizeDw2Pixels() {
   const bar = Math.max(1, Math.round(px * dpr * 0.6)) / dpr;   // Bedienleisten: schmalerer Rahmen
   for (const el of [$('#viewbar'), $('#animbar')]) el.style.setProperty('--px', bar);
 }
+$('#o-shadow').onchange = e => { prefs.shadow = e.target.checked; savePrefs(); view.setShadowVisible(e.target.checked); };
 $('#o-dw2bg').onchange = e => { prefs.on = e.target.checked; savePrefs(); applyDw2Background(); };
 $('#o-dw2speed').oninput = e => { prefs.speed = Number(e.target.value); savePrefs(); applyDw2Background(); };
 new ResizeObserver(sizeDw2Pixels).observe($('#stage'));

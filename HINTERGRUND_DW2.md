@@ -1,12 +1,14 @@
-# Original-Hintergrund von Digimon World 2 (v5.0)
+# Original-Hintergrund von Digimon World 2 (v5.0, ergänzt in v5.1)
 
 Der 3D-Bereich zeigt den animierten Menühintergrund des Originalspiels. Aufbau von hinten nach vorn:
 
 1. **Grund** (`www/bg/bg_base.png`, 320×240): tiefes Dunkelblau, im Zeichenband (y 42–170) wolkiges Blau, dunkle Schattenlinien 4 px neben den kräftigen Rasterlinien.
 2. **DigiCode-Zeichen** (`bg_glyphs_l.png`, `bg_glyphs_r.png`, je 579×240): „デジモンワールド“ (Digimon World), Pixel für Pixel nach dem Referenz-Screenshot gezeichnet. Zeilen 1 und 3 laufen nach links, Zeile 2 nach rechts.
 3. **Raster** (`bg_grid.png`, 32×32): türkis, senkrecht alle 16 px (abwechselnd kräftig/schwach), waagerecht im Muster 8/8/16 px.
-4. **3D-Modell** auf transparenter Leinwand.
-5. **Rahmen und Bedienleisten** im Stil der DW2-Menüfenster (`frame9.png`, `frame_tab.png`).
+4. **Grünes Statusfenster** (v5.1) wie im Statusbildschirm: RGB 0/93/0 mit 63 % Deckkraft (aus dem Referenzbild berechnet: Grund 1/21/89 → 0/66/34, kräftige Rasterlinie → 2/121/55), mit grauer Pixelkante; Raster und Zeichen scheinen grünlich durch.
+5. **Schatten** (v5.1) wie im Spiel: `main/shadow.c` lädt das Modell **0x5B** und zeichnet es auf dem Boden (y = 0) unter der Welt-X/Z-Position von Knochen 0, undurchsichtig (`Gfx_DrawTexModel` Modus 1). Der Viewer liest genau diese Datei über die Dateitabelle in SLUS_011.93 und lässt den Schatten jedem Bild der Animation folgen. Abschaltbar unter Ansicht.
+6. **3D-Modell** auf transparenter Leinwand.
+7. **Rahmen und Bedienleisten** im Stil der DW2-Menüfenster (`frame9.png`, `frame_tab.png`).
 
 ## Messwerte (aus den Referenzen des Nutzers)
 

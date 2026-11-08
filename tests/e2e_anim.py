@@ -113,10 +113,10 @@ def main():
         page.uncheck('#c-cycles'); page.wait_for_timeout(300)
         step('Kanal aus: Zyklus zurück auf Originaltextur', ev('window.__dw2view.native.tex.vram[40*32+10] === window.__dw2view.native.tex.original[40*32+10]'))
         page.check('#c-cycles')
-        side = ev("() => { let s = new Set(); window.__dw2view.model.traverse(o => { if (o.isMesh) s.add(o.material.side); }); return [...s]; }")
+        side = ev("() => { let s = new Set(); window.__dw2view.model.traverse(o => { if (o.isMesh && !o.userData.dw2Shadow) s.add(o.material.side); }); return [...s]; }")
         step('Nur Vorderseiten (PS1-Culling) aktiv', side == [0] and 'Nur Vorderseiten' in diag or side == [0], str(side))
         page.uncheck('#c-cull'); page.wait_for_timeout(100)
-        side2 = ev("() => { let s = new Set(); window.__dw2view.model.traverse(o => { if (o.isMesh) s.add(o.material.side); }); return [...s]; }")
+        side2 = ev("() => { let s = new Set(); window.__dw2view.model.traverse(o => { if (o.isMesh && !o.userData.dw2Shadow) s.add(o.material.side); }); return [...s]; }")
         step('Culling abschaltbar (beidseitig)', side2 == [2], str(side2))
         page.check('#c-cull')
         page.uncheck('#c-bones'); f1 = ev('window.__dw2view.native.player.frame'); page.wait_for_timeout(300)
@@ -139,6 +139,9 @@ def main():
         px = ev("parseFloat(document.querySelector('#stage').style.getPropertyValue('--px'))")
         step('Hintergrund: ganze Gerätepixel je Spielpixel', px > 0 and abs(px * 2 - round(px * 2)) < 1e-6, str(px))
         step('Leinwand transparent über dem Hintergrund', ev('window.__dw2view.scene.background === null'))
+        step('Grünes Statusfenster hinter dem Modell', ev("getComputedStyle(document.querySelector('.stage-panel')).backgroundColor") == 'rgba(0, 93, 0, 0.63)'
+             and ev("getComputedStyle(document.querySelector('.stage-panel')).zIndex") in ('auto', '0'))
+        step('Original-Schatten geladen, unter dem Modell', ev("!!window.__dw2view.shadow && window.__dw2view.shadow.position.y === 0"))
         page.screenshot(path=SHOTS / 'a0_hintergrund.png')
         page.click('#view-settings summary') if not page.is_visible('#o-dw2bg') else None
         page.uncheck('#o-dw2bg'); page.wait_for_timeout(100)

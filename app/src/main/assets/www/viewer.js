@@ -38,6 +38,7 @@ export class Viewer {
     this.smooth = false;        // Glättung zwischen 30-Hz-Zeilen (nicht original)
     this.repeatOnce = false;    // Einmal-Animationen nach kurzer Pause neu starten (nicht original)
     this.native = null;
+    this.shadow = null; this.shadowOn = true; this.shadowCache = new Map();
     this.home = { pos: new THREE.Vector3(0, 0.5, 3), target: new THREE.Vector3(0, 0.4, 0) };
     new ResizeObserver(() => this.resize()).observe(canvas.parentElement);
     this.resize();
@@ -59,6 +60,7 @@ export class Viewer {
     const dt = Math.min(this.clock.getDelta(), 0.25);
     if (this.native) this.stepNative(dt);
     else if (this.mixer && this.playing) this.mixer.update(dt * this.speed);
+    this.followShadow();
     this.controls.update();
     this.renderer.render(this.scene, this.camera);
   }
@@ -75,7 +77,7 @@ export class Viewer {
       });
     }
     this.native?.textures.forEach(t => t.tex.dispose());
-    this.model = null; this.mixer = null; this.actions = []; this.native = null;
+    this.model = null; this.mixer = null; this.actions = []; this.native = null; this.shadow = null;
   }
 
   filter(tex) {
@@ -365,6 +367,39 @@ export class Viewer {
       });
     });
   }
+
+  /** Schatten wie im Spiel (main/shadow.c): Modell 0x5B auf dem Boden (y 0) unter Knochen 0,
+   *  undurchsichtig gezeichnet (Gfx_DrawTexModel Modus 1), immer unter dem Digimon. */
+  async setShadow(url) {
+    const mine = this.token;
+    if (!url || !this.model) return;
+    let src = this.shadowCache.get(url);
+    if (!src) { src = (await this.loader.loadAsync(url)).scene; this.shadowCache.set(url, src); }
+    if (mine !== this.token || !this.model) return;
+    const sh = src.clone(true);
+    sh.name = 'dw2_shadow';
+    sh.traverse(o => {
+      if (!o.isMesh) return;
+      const m = o.material.clone();
+      m.transparent = false; m.alphaTest = 0.5; m.depthWrite = false; m.side = THREE.DoubleSide;
+      m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 4;
+      if (m.map) this.filter(m.map);
+      o.material = m; o.renderOrder = -1; o.userData.dw2Shadow = true;
+    });
+    sh.visible = this.shadowOn;
+    this.model.add(sh);
+    this.shadow = sh;
+    this.followShadow();
+  }
+
+  followShadow() {
+    const sh = this.shadow, root = this.native?.bones[0] || this.model?.getObjectByName('bone_0');
+    if (!sh || !root) return;
+    if (root.matrixAutoUpdate) { sh.position.set(root.position.x, 0, root.position.z); }
+    else { const e = root.matrix.elements; sh.position.set(e[12], 0, e[14]); }
+  }
+
+  setShadowVisible(on) { this.shadowOn = on; if (this.shadow) this.shadow.visible = on; }
 
   setLight(v) { this.key.intensity = v; this.ambient.intensity = 0.4 + v * 0.4; }
   setBackground(hex) { this.bgColor = new THREE.Color(hex); if (this.scene.background) this.scene.background = this.bgColor; }
