@@ -19,46 +19,39 @@ import numpy as np
 from .native_model import NativeModel
 from .rig_animation import D, parents_from_depths
 
+SLOTS = 'ABCDEFGHIJK'
 MODEL = re.compile(r'^M(\d{3}[A-Z0-9]{4})\.BIN$', re.I)
 
 
 class Clip:
-    def __init__(self, indices, termination, loop):
-        self.indices, self.termination, self.loop = indices, termination, loop
+    def __init__(self, indices, termination, loop, index=0, offset=0):
+        self.indices, self.termination, self.loop, self.index, self.offset = indices, termination, loop, index, offset
 
 
 class Animation:
-    """A–K-Animation, gelesen exakt wie dw2_anim.cpp des Original-Konverters (tolerant).
+    """A–K-Animation. Primär exakt nach dem Spielcode (native_anim.parse_anim_file:
+    Clip-Tabelle bis 1, Lücken bleiben als Index erhalten); nur wenn das scheitert,
+    tolerant wie dw2_anim.cpp des Original-Konverters (legacy=True).
 
     transforms[bone][key] ist bereits die glTF-Matrix (D·M·D, D·t), M zeilenweise wie auf der PS1.
     """
     def __init__(self, data, bones):
+        from .native_anim import parse_anim_file
         data = bytes(data)
-        u32 = lambda o: struct.unpack_from('<I', data, o)[0] if 0 <= o and o + 4 <= len(data) else 1
         if len(data) < 4 + 4 * bones + 4:
             raise ValueError('Animationsdatei zu kurz.')
-        offsets = [u32(4 + 4 * i) for i in range(bones)]
-        pos = 4 + 4 * bones
-        offset = u32(pos); pos += 4
-        while offset == 0 and pos + 4 <= len(data):  # Auffüllung überspringen
-            offset = u32(pos); pos += 4
-        frame_offsets = []
-        while offset not in (0, 1) and len(frame_offsets) < 4096:
-            frame_offsets.append(offset)
-            offset = u32(pos); pos += 4
-        self.clips = []
-        for begin in frame_offsets:
-            cursor, rows = begin, []
-            while cursor < len(data) and data[cursor] not in (0xFE, 0xFF):
-                rows.append(tuple(data[cursor:cursor + bones]))
-                cursor += bones
-                if len(rows) > 100000:
-                    break
-            if cursor + 3 > len(data) or not rows or any(len(r) != bones for r in rows):
-                continue  # unvollständigen Clip auslassen, Rest weiter nutzen
-            self.clips.append(Clip(tuple(rows), data[cursor], struct.unpack_from('<H', data, cursor + 1)[0]))
-        if not self.clips:
-            raise ValueError('Keine lesbaren Animationsclips.')
+        self.legacy, self.table_slots, self.gaps, self.warnings = False, 0, [], []
+        try:
+            parsed = parse_anim_file(data, bones, strict=False)
+            offsets = list(parsed.pose_offsets)
+            self.clips = [Clip(tuple(c.rows), c.terminator, c.loop_offset, c.index, c.offset) for c in parsed.clips]
+            self.table_slots, self.gaps, self.warnings = parsed.table_slots, parsed.gaps, parsed.warnings
+        except ValueError as exc:
+            self.legacy = True
+            self.warnings = [f'Spielformat nicht lesbar ({exc}); tolerante Konverter-Lesart.']
+            offsets, self.clips = self._legacy(data, bones)
+            self.table_slots = len(self.clips)
+        self.offsets = offsets
         self.transforms = []
         for bone in range(bones):
             count = max(row[bone] for clip in self.clips for row in clip.indices) + 1
@@ -72,6 +65,38 @@ class Animation:
                     m[:3, 3] = D @ v[9:12]
                 keys.append(m)
             self.transforms.append(keys)
+
+    def clip_name(self, prefix, clip, position):
+        if self.legacy:
+            return f'anim_{prefix}' + (str(position) if len(self.clips) > 1 else '')
+        return f'anim_{prefix}' + (str(clip.index) if self.table_slots > 1 else '')
+
+    @staticmethod
+    def _legacy(data, bones):
+        u32 = lambda o: struct.unpack_from('<I', data, o)[0] if 0 <= o and o + 4 <= len(data) else 1
+        offsets = [u32(4 + 4 * i) for i in range(bones)]
+        pos = 4 + 4 * bones
+        offset = u32(pos); pos += 4
+        while offset == 0 and pos + 4 <= len(data):  # Auffüllung überspringen
+            offset = u32(pos); pos += 4
+        frame_offsets = []
+        while offset not in (0, 1) and len(frame_offsets) < 4096:
+            frame_offsets.append(offset)
+            offset = u32(pos); pos += 4
+        clips = []
+        for begin in frame_offsets:
+            cursor, rows = begin, []
+            while cursor < len(data) and data[cursor] not in (0xFE, 0xFF):
+                rows.append(tuple(data[cursor:cursor + bones]))
+                cursor += bones
+                if len(rows) > 100000:
+                    break
+            if cursor + 3 > len(data) or not rows or any(len(r) != bones for r in rows):
+                continue  # unvollständigen Clip auslassen, Rest weiter nutzen
+            clips.append(Clip(tuple(rows), data[cursor], struct.unpack_from('<H', data, cursor + 1)[0], len(clips), begin))
+        if not clips:
+            raise ValueError('Keine lesbaren Animationsclips.')
+        return offsets, clips
 
     def local_pose(self, clip=0, frame=0):
         row = self.clips[clip].indices[frame]
@@ -122,10 +147,16 @@ def _tim(native, model):
     return indices.reshape(256, 128), words
 
 
-def material_keys(model):
-    """Alle (halbtransparent, CLUT)-Kombinationen in fester Reihenfolge."""
-    return sorted({(bool(stp), clut) for part in model.parts for *_, clut, stp in part.primitives},
-                  key=lambda k: (k[0], k[1]))
+def material_keys(model, native=None):
+    """Alle (halbtransparent, CLUT, ABR)-Kombinationen in fester Reihenfolge.
+
+    ABR (PS1-Mischmodus, tpage Bit 5–6) zählt nur bei halbtransparenten Flächen;
+    ohne native Bytes wird 0 angenommen (frühere Lesart).
+    """
+    if native is None:
+        return sorted({(bool(stp), clut, 0) for part in model.parts for *_, clut, stp in part.primitives})
+    from .native_anim import primitive_modes
+    return sorted({(bool(stp), clut, abr) for modes in primitive_modes(native) for stp, clut, abr in modes})
 
 
 def texture_images(native, indices=None):
@@ -135,7 +166,7 @@ def texture_images(native, indices=None):
     base, words = _tim(native, model)
     indices = base if indices is None else indices
     images = []
-    for stp, clut in material_keys(model):
+    for stp, clut, _abr in material_keys(model, native):
         x, y = (clut & 63) * 16, (clut >> 6) & 1023
         if x not in (0, 16) or not 224 <= y < 256:
             raise ValueError(f'Unbekannte DW2-CLUT 0x{clut:04X}.')
@@ -158,11 +189,13 @@ def convert_model(native, animations, target):
     n = model.bone_count
     depths = list(struct.unpack_from(f'<{n}I', native, 12 + 12 * n))
     parents = parents_from_depths(depths)
-    clips = {}
+    clips, raw_anims, skipped = {}, {}, {}
     for prefix, data in sorted(animations.items()):
         try:
             clips[prefix] = Animation(data, n)
-        except ValueError:
+            raw_anims[prefix] = bytes(data)
+        except ValueError as exc:
+            skipped[prefix] = str(exc)
             continue  # defekte/fremde Animationsdatei überspringen, Modell trotzdem zeigen
 
     doc = {'asset': {'version': '2.0', 'generator': 'DW2 3D Viewer Android (jype-Format)'}, 'scene': 0,
@@ -194,12 +227,14 @@ def convert_model(native, animations, target):
     for i, parent in enumerate(parents):
         (doc['scenes'][0]['nodes'] if parent < 0 else doc['nodes'][parent]['children']).append(i)
 
-    keys = material_keys(model)
-    for i, (stp, clut) in enumerate(keys):
+    from .native_anim import primitive_modes
+    modes = primitive_modes(native)
+    keys = material_keys(model, native)
+    for i, (stp, clut, abr) in enumerate(keys):
         doc['materials'].append({'name': f'tex_{i}', 'doubleSided': True,
                                  'pbrMetallicRoughness': {'baseColorTexture': {'index': i}, 'metallicFactor': 0., 'roughnessFactor': 1.},
                                  **({'alphaMode': 'BLEND'} if stp else {'alphaMode': 'MASK', 'alphaCutoff': .1}),
-                                 'extras': {'clut': clut, 'semi_transparent': stp}})
+                                 'extras': {'clut': clut, 'semi_transparent': stp, 'abr': abr}})
         doc['textures'].append({'sampler': 0, 'source': i})
     for i, image in enumerate(texture_images(native)):
         png = io.BytesIO()
@@ -211,8 +246,8 @@ def convert_model(native, animations, target):
         vertices = np.array([struct.unpack_from('<hhh', native, part.vertices + 6 + i * 6) for i in range(part.vertex_count)], dtype=float) @ D
         normals = np.array([struct.unpack_from('<hhh', native, part.normals + 6 + i * 6) for i in range(part.normal_count)], dtype=float) @ D / 4096
         groups = {}
-        for vs, normal_ids, uv, clut, stp in part.primitives:
-            points, ns, uvs = groups.setdefault(material[(bool(stp), clut)], ([], [], []))
+        for (vs, normal_ids, uv, clut, stp), mode in zip(part.primitives, modes[bone]):
+            points, ns, uvs = groups.setdefault(material[(bool(stp), clut, mode[2])], ([], [], []))
             for order in ((2, 1, 0), (1, 2, 3)) if len(vs) == 4 else ((2, 1, 0),):
                 for j in order:
                     points.append(vertices[vs[j]])
@@ -235,9 +270,11 @@ def convert_model(native, animations, target):
             return cache[bone, key]
 
         for ci, clip in enumerate(animation.clips):
-            name = f'anim_{prefix}' + (str(ci) if len(animation.clips) > 1 else '')
+            name = animation.clip_name(prefix, clip, ci)
+            loop_row = clip.loop // n if clip.termination == 0xFE and clip.loop % n == 0 else None
             a = {'name': name, 'samplers': [], 'channels': [],
-                 'extras': {'termination_mask': clip.termination, 'loop_mask': clip.loop}}
+                 'extras': {'termination_mask': clip.termination, 'loop_mask': clip.loop, 'loop_row': loop_row,
+                            'game_anim_id': SLOTS.index(prefix) * 10 + clip.index if prefix in SLOTS else None}}
             times = accessor(np.arange(len(clip.indices), dtype=float) / 30, 'SCALAR')
             for bone in range(n):
                 values = [trs_of(bone, row[bone]) for row in clip.indices]
@@ -251,10 +288,40 @@ def convert_model(native, animations, target):
                     a['channels'].append({'sampler': len(a['samplers']) - 1, 'target': {'node': bone, 'path': channel}})
             doc['animations'].append(a)
 
+    doc['scenes'][0]['extras']['dw2_native'] = native_payload(native, model, depths, clips, raw_anims, skipped)
     doc['buffers'] = [{'byteLength': len(binary), 'uri': 'data:application/octet-stream;base64,' + base64.b64encode(binary).decode()}]
     target = Path(target)
     target.write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
     return target
+
+
+def native_payload(native, model, depths, clips, raw_anims, skipped=None):
+    """Rohdaten für den originalgetreuen Player im Viewer (viewer.js NativeAnimator).
+
+    Enthält nur Daten dieses Modells: Animationsdateien unverändert, die 128×256-
+    Texturwörter (VRAM-Abbild der Modelltextur) und den texAnimParts-Block.
+    """
+    from .native_anim import parse_tex_anim
+    anims = []
+    for prefix, animation in clips.items():
+        for ci, clip in enumerate(animation.clips):
+            anims.append({'name': animation.clip_name(prefix, clip, ci), 'file': prefix, 'clip': ci,
+                          'index': clip.index, 'id': SLOTS.index(prefix) * 10 + clip.index if prefix in SLOTS else -1,
+                          'offset': clip.offset, 'rows': len(clip.indices), 'terminator': clip.termination, 'loop': clip.loop,
+                          'legacy': animation.legacy})
+    tim = model.tim_start
+    try:
+        tex = parse_tex_anim(native)
+        tex_info = {'region': base64.b64encode(tex.region).decode(), 'eyes': len(tex.eyes), 'cycles': len(tex.cycles),
+                    'extended': len(tex.extended), 'warnings': tex.warnings, 'palette': tex.touches_palette()}
+    except (ValueError, struct.error) as exc:
+        tex_info = {'region': '', 'eyes': 0, 'cycles': 0, 'extended': 0, 'warnings': [str(exc)], 'palette': False}
+    return {'format': 1, 'bones': model.bone_count, 'depths': depths,
+            'files': {p: base64.b64encode(d).decode() for p, d in raw_anims.items()},
+            'file_warnings': {p: a.warnings for p, a in clips.items() if a.warnings},
+            'skipped': skipped or {}, 'anims': anims,
+            'vram': base64.b64encode(native[tim + 64:tim + 64 + 0x4000]).decode(),
+            'texanim': tex_info}
 
 
 def convert_folder(source, output):

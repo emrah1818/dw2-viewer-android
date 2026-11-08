@@ -53,3 +53,6 @@ pre#log{white-space:pre-wrap;font-size:12px;color:var(--sub);max-height:40vh;ove
 .cmp img{width:100%;image-rendering:pixelated;background:repeating-conic-gradient(#223 0 25%,#334 0 50%) 0 0/16px 16px;border-radius:6px}
 .warn{color:var(--warn)}
 table.plan{width:100%;font-size:12px;border-collapse:collapse}table.plan td{border-bottom:1px solid var(--line);padding:4px}
+
+#anim-info { padding: 0 12px 6px; min-height: 1.2em; font-size: 12px; }
+#diag-info div { margin: 2px 0; }

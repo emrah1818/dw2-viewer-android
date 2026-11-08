@@ -99,6 +99,7 @@ const field = (label, id, value, attrs = '') =>
 // ---------------------------------------------------------------- Zustand / Seiten
 const state = { catalog: [], filtered: [], id: null, loaded: null, image: null, prefetch: new Set() };
 const view = new Viewer($('#gl'));
+window.__dw2view = view;   // für Diagnose und automatisierte Oberflächentests
 view.setLight(1.2);
 const nameOf = id => state.catalog.find(c => c.id === id)?.name ?? `#${id}`;
 
@@ -176,7 +177,7 @@ async function loadModel(id) {
       ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('')
       : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
-    if (info.eyes) view.setEyes(info.eyes.frames.map(list => list.map(u => BASE + u))).catch(e => log('Augen: ' + e.message));
+    renderDiag(info);
     log(`${info.name}: ${t('geladen')} (${info.seconds} s)`);
     prefetchNeighbours(id);
   } catch (e) {
@@ -195,7 +196,47 @@ async function prefetchNeighbours(id) {
   }
 }
 $('#anim').onchange = e => view.play(Number(e.target.value));
-$('#play').onclick = () => { view.playing = !view.playing; $('#play').textContent = view.playing ? '⏸' : '▶'; };
+$('#play').onclick = () => {
+  if (view.playing && view.restartIfFinished()) return;
+  view.playing = !view.playing; $('#play').textContent = view.playing ? '⏸' : '▶';
+};
+$('#o-smooth').onchange = e => { view.smooth = e.target.checked; };
+$('#o-repeat').onchange = e => { view.repeatOnce = e.target.checked; };
+for (const [id, ch] of [['#c-bones', 'bones'], ['#c-cycles', 'cycles'], ['#c-extended', 'extended'], ['#c-blend', 'blend']]) {
+  $(id).onchange = e => view.setChannel(ch, e.target.checked);
+}
+function animStatus() {
+  const s = view.status();
+  const el = $('#anim-info');
+  if (!s) { el.textContent = view.native === null && view.actions.length ? t('Wiedergabe über glTF (keine nativen Spieldaten)') : ''; return; }
+  const parts = [`${t('Spiel-ID')} ${s.id}`, `${t('Bild')} ${s.frame}/${s.rows}`];
+  parts.push(s.loopRow ? t('Schleife ab Bild {n}', { n: s.loopRow }) : (s.finished ? t('einmalig · beendet (▶ startet neu)') : t('einmalig')));
+  if (s.blink.startsWith('zu')) parts.push(t('Augen geschlossen (Spielregel)'));
+  if (!view.playing) parts.push(t('pausiert'));
+  el.textContent = parts.join(' · ');
+}
+setInterval(animStatus, 250);
+function renderDiag(info) {
+  const c = view.channelsInfo();
+  const el = $('#diag-info');
+  if (!c) { el.textContent = t('Keine nativen Animationsdaten (Import oder älterer Cache).'); return; }
+  const src = info?.anim_source;
+  const shared = src ? Object.entries(src.slots || {}).filter(([, v]) => v.shared).map(([k, v]) => `${k}=${v.file}`) : [];
+  const rows = [
+    [t('Knochen'), c.bones], [t('Animationsdateien'), c.files], [t('Clips'), `${c.clips} (${t('Schleifen')} ${c.loops}, ${t('einmalig')} ${c.holds})`],
+    [t('Zuordnung'), src?.source === 'MODELDT' ? t('Spieltabelle MODELDT') : t('Dateiname')],
+    [t('Geteilte Animationen'), shared.join(', ') || '–'],
+    [t('Augen'), c.eyes], [t('Texturzyklen'), c.cycles], [t('Erweiterte Texturanimation'), c.extended],
+    [t('Palettenzeilen betroffen'), c.palette ? t('ja') : t('nein')], [t('Halbtransparenz'), c.semi],
+  ];
+  if (c.legacy) rows.push([t('Hinweis'), t('{n} Clips nur tolerant lesbar', { n: c.legacy })]);
+  el.innerHTML = rows.map(([k, v]) => `<div><b>${esc(k)}:</b> ${esc(String(v))}</div>`).join('') +
+    [...c.warnings, ...(src?.notes || [])].map(w => `<div class="warn">${esc(w)}</div>`).join('');
+}
+$('#b-native-zip').onclick = async () => {
+  if (!needDigimon()) return;
+  try { await exportFile(busy('Rohdaten werden gepackt …', () => native('native_files_export', state.id))); } catch (e) { await fail(e); }
+};
 $('#speed').oninput = e => { view.speed = Number(e.target.value); };
 $('#reset').onclick = () => view.resetCamera();
 $('#o-blink').onchange = e => { view.blink = e.target.checked; };
@@ -311,6 +352,7 @@ async function showImport(ins) {
   showEditState({ foreign: true });
   try {
     const r = await view.load(BASE + ins.view);
+    renderDiag(null);
     $('#anim').innerHTML = r.animations.length ? r.animations.map((n, i) => `<option value="${i}">${esc(n)}</option>`).join('') : `<option>${t('Keine Animationen')}</option>`;
     if (r.animations.length) view.play(0);
   } catch (e) { await fail(e); }
@@ -622,6 +664,31 @@ $('#b-saveroster').onclick = async () => {
 
 // ---------------------------------------------------------------- Mehr
 $('#lang').onchange = e => { lang = e.target.value; localStorage.setItem('lang', lang); applyLang(); };
+$('#b-audit').onclick = async () => {
+  try {
+    const r = await busy('Alle Modelle werden geprüft …', () => native('animation_audit'));
+    const s = r.summary;
+    const ok = await modal((box, close) => {
+      const line = (k, v) => `<div><b>${esc(t(k))}:</b> ${v}</div>`;
+      box.innerHTML = `<h3>${t('Animationsprüfung')}</h3>` +
+        line('Modelle', s.models) + line('Fehler', s.errors) + line('Zuordnung über Spieltabelle', s.anim_source_table) +
+        line('Mit Augenanimation', s.with_eyes) + line('Mit Texturzyklus', s.with_tex_cycles) +
+        line('Mit erweiterter Texturanimation', s.with_tex_extended) + line('Mit Palettenkopie', s.with_palette_copy) +
+        line('Mit Halbtransparenz', s.with_semi_faces) + line('Mit Mischmodus ≠ 50 %', s.with_abr_non_average) +
+        line('Mit geteilten Animationen', s.with_shared_anims) + line('Ohne Animationen', s.without_anims) +
+        line('Mit Tabellenlücken', s.with_table_gaps) + line('Schleife ab Zwischenbild', s.with_loop_offset) +
+        line('Mit Scherung/Skalierung', s.with_sheared_keys) + line('Dauer (s)', s.seconds) +
+        `<p class="hint">${r.highlight.slice(0, 40).map(h => esc(`#${h.id} ${h.name}: ${h.missing.join(', ')}`)).join('<br>')}</p>` +
+        `<div class="btns"><button id="m-no">${t('Schließen')}</button><button id="m-yes" class="primary">${t('Bericht exportieren')}</button></div>`;
+      $('#m-no', box).onclick = () => close(false); $('#m-yes', box).onclick = () => close(true);
+    });
+    log(`${t('Animationsprüfung')}: ${s.models} ${t('Modelle')}, ${s.errors} ${t('Fehler')}`);
+    if (ok) {
+      await exportFile(Promise.resolve({ path: r.path, name: r.name }));
+      await exportFile(Promise.resolve({ path: r.csv, name: r.csv_name }));
+    }
+  } catch (e) { await fail(e); } finally { setOverlay(false); }
+};
 $('#b-clear').onclick = async () => {
   try { await native('clear_cache'); state.prefetch.clear(); toast(t('Zwischenspeicher geleert.')); } catch (e) { await fail(e); }
 };

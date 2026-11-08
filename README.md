@@ -23,6 +23,7 @@ DW2 3D Viewer brings Digimon World 2 model exploration and editing to Android. B
 | --- | --- |
 | Digimon browser | Search and select Digimon from the loaded image. |
 | Interactive 3D viewer | Rotate, zoom and pan; select animations, adjust playback speed and reset the camera. Grid, wireframe, pixel look, lighting and background controls are available. |
+| Full animation support (v4.2 test) | Game-accurate playback reconstructed from the game code: 30 fps bone keys with loop points and one-shot holds, eye blinking, texture animations (VRAM copies), PS1 blend modes and animation files shared via MODELDT. Diagnostics per channel and an animation check of all models. See [ANIMATION_ANALYSE.md](ANIMATION_ANALYSE.md). |
 | Texture editing | Export PNG textures at 1×–4× scale, preview replacement PNGs, replace eye textures and choose palette/downscaling settings. The v3.1 palette mode is the default. |
 | Model exchange | Export GLB/glTF with bones and animations; preview imported GLB/glTF/OBJ files and use the model replacement tools, including bone mapping. |
 | Game-data editor | Edit names, type, specialty, battle techniques, enemy statistics and EXP. |

@@ -6,3 +6,4 @@ build/
 local.properties
 *.jks
 __pycache__/
+tests/_fixture_payload.json

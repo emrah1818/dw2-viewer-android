@@ -19,7 +19,7 @@ import traceback
 CACHE = None          # Arbeitsordner der App (filesDir/viewer)
 NATIVE_DIR = None     # nativeLibraryDir (enthält libdw2conv.so)
 _lock = threading.RLock()
-CONVERTER_VERSION = 'v5'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
+CONVERTER_VERSION = 'v6'   # erhöhen, wenn sich die Konvertierung ändert (alter Cache wird ignoriert)
 
 
 class State:
@@ -399,16 +399,76 @@ def _convert(source, output):
     convert_folder(source, output)
 
 
+def _basename(entry):
+    return Path(entry.path.replace('\\', '/')).name.upper()
+
+
+def _model_family(c, original=False, repo=None):
+    """M-Datei plus die Animationsdateien, die das Spiel für diese Digimon-ID lädt.
+
+    Zuordnung wie Digi_GetAnimFile (MODELDT animFiles[11] → A–K). Jede so gefundene
+    Datei muss zur Knochenzahl des Modells passen; sonst bzw. ohne Tabelle gilt die
+    bisherige Dateinamen-Zuordnung (gleicher Stamm). Rückgabe: (files, aliases, info).
+    """
+    from dw2studio.core.auto_models import selected_model_entries, model_entries
+    from dw2studio.core.native_anim import game_anim_slots, parse_anim_file, SLOTS
+    s = _need_session()
+    stem = f'{c.id:03d}{c.code}'.upper()
+    own = {}
+    for entry in selected_model_entries(S.entries, c):
+        own.setdefault(_basename(entry)[0], entry)
+    model = own.get('M')
+    info = {'source': 'filename', 'slots': {}, 'notes': []}
+    if model is None:
+        return list(own.values()), {}, info
+    read = s.original if original else s.current
+    try:
+        bones = struct.unpack_from('<I', read(model), 8)[0]
+    except (struct.error, OSError, ValueError):
+        return list(own.values()), {}, info
+    slots, table = game_anim_slots(s, S.entries, c.id, f'M{stem}.BIN', repo)
+    info['table'] = table
+    by_name = {}
+    for entry in model_entries(S.entries):
+        by_name.setdefault(_basename(entry), entry)
+    files, aliases = [model], {}
+    for slot in SLOTS:
+        chosen, origin = None, None
+        name = slots.get(slot)
+        if name:
+            entry = by_name.get(name)
+            if entry is None:
+                info['notes'].append(f'{slot}: {name} fehlt im Image')
+            else:
+                try:
+                    parse_anim_file(read(entry), bones, strict=False)
+                    chosen, origin = entry, 'MODELDT'
+                except (ValueError, OSError) as exc:
+                    info['notes'].append(f'{slot}: {name} passt nicht ({exc})')
+        if chosen is None and slot in own:
+            chosen = own[slot]
+            origin = 'filename' if not slots else 'fallback' if slot in slots else 'unassigned'
+            if origin == 'unassigned':
+                info['notes'].append(f'{slot}: {_basename(chosen)} ist laut Spieltabelle keinem Slot zugeordnet (trotzdem angezeigt)')
+        if chosen is None:
+            continue
+        files.append(chosen)
+        info['slots'][slot] = {'file': _basename(chosen), 'origin': origin, 'shared': _basename(chosen)[1:] != f'{stem}.BIN'}
+        target = f'{slot}{stem}.BIN'
+        if _basename(chosen) != target:
+            aliases[(chosen.path, chosen.lba)] = target
+    if slots:
+        info['source'] = 'MODELDT'
+    return files, aliases, info
+
+
 def prepare_model(identifier, original=False):
     from dw2studio.core.fast_loading import ModelRequest, build_model
-    from dw2studio.core.auto_models import selected_model_entries, model_animation_names
+    from dw2studio.core.auto_models import model_animation_names
     s = _need_session()
     c = _find(identifier)
     key = _key(c)
-    unique = {}
-    for entry in selected_model_entries(S.entries, c):
-        unique[(entry.lba, entry.size, Path(entry.path.replace('\\', '/')).name.upper())] = entry
-    files = list(unique.values())
+    files, aliases, family = _model_family(c, original)
     if not files:
         raise ValueError('Für dieses Digimon wurden keine Modell-Dateien gefunden.')
     overrides = {}
@@ -428,77 +488,164 @@ def prepare_model(identifier, original=False):
             digest.update(data)
         folder = folder / 'edits' / digest.hexdigest()
     started = time.perf_counter()
-    request = ModelRequest(f'{S.index_key}/{key}', str(S.image_path), files, folder, c, '', overrides)
+    request = ModelRequest(f'{S.index_key}/{key}', str(S.image_path), files, folder, c, '', overrides, aliases)
     model = build_model(request, _convert)
     try:
         animations = model_animation_names(model)
     except Exception:
         animations = []
-    native = next((e for e in files if Path(e.path.replace('\\', '/')).name.upper().startswith('M')), None)
-    eyes = _eye_frames(s.original(native) if original else s.current(native), model.parent) if native else None
     return {'url': model.relative_to(CACHE).as_posix(), 'name': c.name, 'id': c.id, 'code': c.code,
-            'animations': animations, 'eyes': eyes, 'edited': edited, 'original': bool(original),
+            'animations': animations, 'anim_source': family, 'edited': edited, 'original': bool(original),
             'seconds': round(time.perf_counter() - started, 2)}
 
 
-def _display_eye_layout(native):
-    """Nur für die Anzeige: Blinzeldaten direkt lesen (wie der Konverter sie ablegt).
-
-    Der Desktop-Kern verlangt zusätzlich Schreibsicherheit; für die Vorschau genügt,
-    dass alle Rechtecke im Pixelbereich liegen.
-    """
-    from types import SimpleNamespace
-    tim, _, n = struct.unpack_from('<III', native)
-    start = 12 + 16 * n
-    meta = native[start:start + 24]
-    if len(meta) < 24 or meta[0] in (0xFE, 0xFF):
-        return None
-    x, y, w, h = meta[0] * 4, meta[1], meta[2] * 4, meta[3]
-    if not (w and h and x + w <= 128 and y + h <= 256):
-        return None
-    target, sources = (x, y, w, h), []
-    for i in range(4, 20, 2):
-        sx, sy = meta[i], meta[i + 1]
-        if (sx, sy) == (255, 255):
-            break
-        rect = (sx * 4, sy, w, h)
-        if rect[0] + w > 128 or rect[1] + h > 256:
-            return None
-        if rect != target and rect not in sources:
-            sources.append(rect)
-    if not sources:
-        return None
-    return SimpleNamespace(sources=tuple(sources) + (target,), target=target)
-
-
-def _eye_frames(native, folder):
-    """Augenposen wie in der Windows-Vorschau, aber je Material/Palette als eigene Textur.
-
-    Rückgabe: {'frames': [[url je Material] je Pose], 'default': Index der Ruhepose} oder None.
-    """
-    from dw2studio.core.dw2_eyes import eye_layout
-    from dw2studio.core.native_gltf import _tim, texture_images
+# --------------------------------------------------------------------------- Animations-Prüfung
+def _audit_one(c, repo=None):
+    from dw2studio.core.native_anim import parse_anim_file, parse_tex_anim, primitive_modes, matrix_flags
     from dw2studio.core.native_model import NativeModel
+    s = _need_session()
+    files, aliases, family = _model_family(c, repo=repo)
+    row = {'id': c.id, 'code': c.code, 'name': c.name, 'anim_source': family['source'], 'notes': list(family['notes'])}
+    model = next((e for e in files if _basename(e).startswith('M')), None)
+    if model is None:
+        row['error'] = 'keine M-Datei'
+        return row
+    native = s.current(model)
     try:
-        layout = eye_layout(native) or _display_eye_layout(native)
-        if layout is None or len(layout.sources) < 2:
-            return None
-        tx, ty, tw, th = layout.target
-        base, _ = _tim(native, NativeModel(native))
-        frames = []
-        for f, (sx, sy, w, h) in enumerate(layout.sources):
-            names = sorted(folder.glob(f'eyes_{f}_*.png'), key=lambda p: int(p.stem.rsplit('_', 1)[1]))
-            if not names:
-                indices = base.copy()
-                indices[ty:ty + th, tx:tx + tw] = base[sy:sy + h, sx:sx + w]
-                for i, image in enumerate(texture_images(native, indices)):
-                    image.save(folder / f'eyes_{f}_{i}.png')
-                names = sorted(folder.glob(f'eyes_{f}_*.png'), key=lambda p: int(p.stem.rsplit('_', 1)[1]))
-            frames.append([p.relative_to(CACHE).as_posix() for p in names])
-        return {'frames': frames, 'default': len(frames) - 1}
-    except Exception:
-        traceback.print_exc()
-        return None
+        m = NativeModel(native)
+    except ValueError as exc:
+        row['error'] = f'Modell: {exc}'
+        return row
+    row['bones'] = m.bone_count
+    try:
+        tex = parse_tex_anim(native)
+        row.update(eyes=len(tex.eyes), tex_cycles=len(tex.cycles), tex_extended=len(tex.extended),
+                   tex_palette=tex.touches_palette(), tex_warnings=tex.warnings)
+    except (ValueError, struct.error) as exc:
+        row.update(eyes=0, tex_cycles=0, tex_extended=0, tex_palette=False, tex_warnings=[str(exc)])
+    abr = {}
+    semi = 0
+    for modes in primitive_modes(native):
+        for stp, _clut, mode in modes:
+            if stp:
+                semi += 1
+                abr[mode] = abr.get(mode, 0) + 1
+    row['semi_faces'] = semi
+    row['abr'] = {str(k): v for k, v in sorted(abr.items())}
+    anims, flags = {}, {'keys': 0, 'scaled_keys': 0, 'sheared_keys': 0, 'mirrored_keys': 0}
+    clips = loops = holds = gaps = 0
+    for e in files:
+        slot = (aliases.get((e.path, e.lba)) or _basename(e))[0]
+        if slot == 'M':
+            continue
+        data = s.current(e)
+        try:
+            a = parse_anim_file(data, m.bone_count, strict=False)
+        except ValueError as exc:
+            anims[slot] = {'file': _basename(e), 'error': str(exc)}
+            continue
+        f = matrix_flags(data, a)
+        for k in flags:
+            flags[k] += f[k]
+        lp = [c2.loop_row for c2 in a.clips if c2.terminator == 0xFE]
+        anims[slot] = {'file': _basename(e), 'shared': family['slots'].get(slot, {}).get('shared', False),
+                       'clips': len(a.clips), 'gaps': a.gaps, 'loop_rows': lp,
+                       'holds': sum(c2.terminator == 0xFF for c2 in a.clips),
+                       'rows': [len(c2.rows) for c2 in a.clips], 'warnings': a.warnings}
+        clips += len(a.clips)
+        loops += len(lp)
+        holds += anims[slot]['holds']
+        gaps += len(a.gaps)
+    row.update(anims=anims, clips=clips, loops=loops, holds=holds, table_gaps=gaps, **flags)
+    # Was dem Viewer bis v4.1 fehlte (zur Übersicht):
+    need = []
+    if row['eyes']:
+        need.append('Augen (Spielrhythmus)')
+    if row['tex_cycles'] or row['tex_extended']:
+        need.append('Texturanimation')
+    if row['tex_palette']:
+        need.append('Palettenkopie')
+    if any(k != '0' for k in row['abr']):
+        need.append('Mischmodus ' + '/'.join(k for k in row['abr'] if k != '0'))
+    if gaps:
+        need.append('Clips hinter Tabellenlücke')
+    if any(v.get('shared') for v in anims.values()):
+        need.append('Geteilte Animationen (MODELDT)')
+    if any(lr for v in anims.values() for lr in v.get('loop_rows', [])):
+        need.append('Schleife ab Zwischenbild')
+    if holds:
+        need.append('Einmal-Animationen')
+    if flags['sheared_keys']:
+        need.append('Scherung/Skalierung')
+    row['viewer_v41_missing'] = need
+    return row
+
+
+def animation_audit():
+    """Prüft alle Digimon-Modelle des Images; schreibt JSON und CSV nach exports."""
+    _need_session()
+    started = time.perf_counter()
+    rows = []
+    try:
+        from dw2studio.core.digimon_names import NameRepository
+        repo = NameRepository(S.session, S.entries)
+    except (ValueError, OSError):
+        repo = None
+    for c in S.catalog:
+        try:
+            rows.append(_audit_one(c, repo))
+        except Exception as exc:  # ein Modell darf die Prüfung nicht abbrechen
+            traceback.print_exc()
+            rows.append({'id': c.id, 'code': c.code, 'name': c.name, 'error': f'{exc.__class__.__name__}: {exc}'})
+    summary = {'models': len(rows), 'errors': sum('error' in r for r in rows),
+               'with_eyes': sum(bool(r.get('eyes')) for r in rows),
+               'with_tex_cycles': sum(bool(r.get('tex_cycles')) for r in rows),
+               'with_tex_extended': sum(bool(r.get('tex_extended')) for r in rows),
+               'with_palette_copy': sum(bool(r.get('tex_palette')) for r in rows),
+               'with_semi_faces': sum(bool(r.get('semi_faces')) for r in rows),
+               'with_abr_non_average': sum(any(k != '0' for k in r.get('abr', {})) for r in rows),
+               'with_shared_anims': sum(any(v.get('shared') for v in r.get('anims', {}).values()) for r in rows),
+               'without_anims': sum(not r.get('clips') for r in rows if 'error' not in r),
+               'with_table_gaps': sum(bool(r.get('table_gaps')) for r in rows),
+               'with_loop_offset': sum(any(lr for v in r.get('anims', {}).values() for lr in v.get('loop_rows', [])) for r in rows),
+               'with_sheared_keys': sum(bool(r.get('sheared_keys')) for r in rows),
+               'anim_source_table': sum(r.get('anim_source') == 'MODELDT' for r in rows),
+               'seconds': 0}
+    summary['seconds'] = round(time.perf_counter() - started, 1)
+    folder = _exports()
+    stamp = time.strftime('%Y%m%d_%H%M%S')
+    path = folder / f'animationspruefung_{stamp}.json'
+    path.write_text(json.dumps({'summary': summary, 'models': rows}, ensure_ascii=False, indent=1), encoding='utf-8')
+    import csv
+    csv_path = folder / f'animationspruefung_{stamp}.csv'
+    cols = ['id', 'code', 'name', 'bones', 'anim_source', 'clips', 'loops', 'holds', 'table_gaps', 'eyes', 'tex_cycles',
+            'tex_extended', 'tex_palette', 'semi_faces', 'abr', 'keys', 'sheared_keys', 'scaled_keys', 'viewer_v41_missing', 'error', 'notes']
+    with csv_path.open('w', newline='', encoding='utf-8-sig') as fh:
+        w = csv.writer(fh, delimiter=';')
+        w.writerow(cols)
+        for r in rows:
+            w.writerow([json.dumps(r.get(k), ensure_ascii=False) if isinstance(r.get(k), (dict, list)) else r.get(k, '') for k in cols])
+    top = [{'id': r['id'], 'name': r['name'], 'missing': r.get('viewer_v41_missing', [])} for r in rows
+           if any(x in ('Texturanimation', 'Palettenkopie') or x.startswith('Mischmodus') for x in r.get('viewer_v41_missing', []))]
+    return {'summary': summary, 'path': str(path), 'name': path.name, 'csv': str(csv_path), 'csv_name': csv_path.name,
+            'highlight': top[:400]}
+
+
+def native_files_export(identifier):
+    """Rohdateien (M + zugeordnete A–K) eines Digimon als ZIP – zur technischen Analyse."""
+    import zipfile
+    s = _need_session()
+    c = _find(identifier)
+    files, aliases, family = _model_family(c)
+    folder = _exports()
+    target = folder / _unique_name(folder, f'{c.id:03d}{c.code}_native.zip')
+    with zipfile.ZipFile(target, 'w', zipfile.ZIP_DEFLATED) as z:
+        for e in files:
+            z.writestr(_basename(e), s.current(e))
+        z.writestr('zuordnung.json', json.dumps({'id': c.id, 'code': c.code, 'name': c.name, 'family': family,
+                                                  'aliases': {_basename(e): aliases.get((e.path, e.lba)) for e in files}},
+                                                 ensure_ascii=False, indent=1, default=str))
+    return {'path': str(target), 'name': target.name}
 
 
 # --------------------------------------------------------------------------- Verlauf (Rückgängig / Wiederherstellen)
@@ -581,6 +728,7 @@ _METHODS = {
     'save_project': save_project, 'load_project': load_project, 'delete_export': delete_export,
     'prepare_model': prepare_model, 'clear_cache': clear_cache, 'translate': translate,
     'history': history, 'undo': undo, 'redo': redo, 'adopt_image': adopt_image,
+    'animation_audit': animation_audit, 'native_files_export': native_files_export,
 }
 
 

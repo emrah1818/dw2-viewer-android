@@ -62,6 +62,7 @@ class ModelRequest:
     candidate:object
     converter:str
     overrides:dict
+    aliases:dict=None   # Eintragsschlüssel (path,lba) -> Zieldateiname (Spielzuordnung A–K aus MODELDT)
 
 
 def build_model(job,convert,cancel=lambda:False):
@@ -80,8 +81,9 @@ def build_model(job,convert,cancel=lambda:False):
                 if cancel():raise RuntimeError('Konvertierung abgebrochen')
                 name=Path(entry.path.replace('\\','/')).name
                 data=job.overrides.get(name)
-                if data is None:disc.extract(entry,source/name)
-                else:(source/name).write_bytes(data)
+                target=(job.aliases or {}).get((entry.path,entry.lba),name)
+                if data is None:disc.extract(entry,source/target)
+                else:(source/target).write_bytes(data)
         finally:disc.close()
         if not any(source.iterdir()):raise ValueError('Keine extrahierten Modell-Dateien gefunden')
         convert(source,output)

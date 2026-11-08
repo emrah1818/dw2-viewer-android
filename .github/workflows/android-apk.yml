@@ -2,7 +2,7 @@ name: Android APK - DW2 3D Viewer
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
 
 permissions:
   contents: write
@@ -32,11 +32,29 @@ jobs:
       - name: three.js holen
         run: bash tools/fetch_deps.sh
 
-      - name: Tests der Android-Brücke
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Tests der Android-Brücke und der Animationswiedergabe
         run: |
           python -m pip install --upgrade pip numpy pillow
           python tests/test_android_api.py
           python tests/test_android_edit.py
+          python tests/test_native_anim.py
+          node tests/test_native_anim.mjs
+
+      - name: Build-Kennung
+        run: |
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "APK_NAME=DW2_3D_Viewer_v4.1_test.apk" >> "$GITHUB_ENV"
+            echo "REL_TAG=test-build" >> "$GITHUB_ENV"
+            echo "REL_NAME=Test-APK (neuester Build)" >> "$GITHUB_ENV"
+          else
+            echo "APK_NAME=DW2_3D_Viewer_v4.2_Full_Animation_Support_test.apk" >> "$GITHUB_ENV"
+            echo "REL_TAG=test-full-animation-support" >> "$GITHUB_ENV"
+            echo "REL_NAME=3D Viewer – Full Animation Support (Test-Build)" >> "$GITHUB_ENV"
+          fi
 
       - uses: gradle/actions/setup-gradle@v4
         with:
@@ -49,24 +67,26 @@ jobs:
         run: |
           APK=$(ls app/build/outputs/apk/debug/*.apk)
           unzip -l "$APK" | grep -E "assets/www/index.html|assets/www/lib/three.module.js|libpython"
-          cp "$APK" DW2_3D_Viewer_v4.1_test.apk
+          cp "$APK" "$APK_NAME"
 
       - uses: actions/upload-artifact@v4
         with:
           name: DW2-3D-Viewer-test-apk
-          path: DW2_3D_Viewer_v4.1_test.apk
+          path: ${{ env.APK_NAME }}
 
       - name: Test-APK als Download-Seite veröffentlichen (Release "test-build")
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: test-build
-          name: Test-APK (neuester Build)
+          tag_name: ${{ env.REL_TAG }}
+          name: ${{ env.REL_NAME }}
           prerelease: true
-          files: DW2_3D_Viewer_v4.1_test.apk
-          body: Neuester automatischer Test-Build. Auf dem Handy herunterladen und installieren.
+          target_commitish: ${{ github.sha }}
+          files: ${{ env.APK_NAME }}
+          body: Automatischer Test-Build (${{ github.ref_name }}, ${{ github.sha }}). Auf dem Handy herunterladen und installieren. Keine finale Veröffentlichung.
 
       # Für die Veröffentlichung: signiertes Release-Bundle, nur wenn die Secrets gesetzt sind.
       - name: Release-Signatur vorbereiten
+        if: github.ref_name == 'main'
         env:
           KS: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
