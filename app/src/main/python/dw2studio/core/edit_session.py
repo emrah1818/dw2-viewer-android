@@ -197,8 +197,8 @@ class EditSession:
                 os.replace(temporary, destination)
             else:
                 # Atomic create-only publication: a racing new file is never overwritten.
-                os.link(temporary, destination)
-                temporary.unlink()
+                from .safe_publish import publish_new
+                publish_new(temporary, destination)
             self.last_relocations=composed.mapped
             return destination, backup
         finally:

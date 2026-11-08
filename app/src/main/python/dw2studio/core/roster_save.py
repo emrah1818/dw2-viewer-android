@@ -194,7 +194,7 @@ class RosterSave:
             with os.fdopen(fd,'wb') as out:out.write(data);out.flush();os.fsync(out.fileno())
             # Windows rename refuses an existing destination, including on
             # removable filesystems without hardlinks. POSIX uses no-clobber link.
-            if os.name=='nt':os.rename(temporary,target)
-            else:os.link(temporary,target)
+            from .safe_publish import publish_new
+            publish_new(temporary,target)
         finally:temporary.unlink(missing_ok=True)
         return target
