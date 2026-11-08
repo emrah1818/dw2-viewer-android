@@ -3,7 +3,7 @@ import { EN } from './i18n.js';
 
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
-const BASE = 'https://appassets.androidplatform.net/viewer/';
+const BASE = window.DW2_BASE ?? 'https://appassets.androidplatform.net/viewer/';   // Web-Version: '' (blob:-Adressen)
 
 // ---------------------------------------------------------------- Sprache
 let lang = localStorage.getItem('lang') || ((navigator.language || 'de').startsWith('de') ? 'de' : 'en');

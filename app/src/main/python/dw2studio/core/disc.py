@@ -112,3 +112,29 @@ class Disc:
         h=hashlib.sha256(); self.f.seek(0)
         for chunk in iter(lambda:self.f.read(4*1024*1024),b''):h.update(chunk)
         return h.hexdigest()
+
+
+def scan_matches(path, pattern, chunk=32 << 20, margin=4096):
+    """Regex über eine große Datei in Blöcken (statt mmap): liefert (Treffer, Puffer, Versatz).
+
+    Absolute Position = Versatz + Treffer.start(). Jeder Puffer enthält davor und danach
+    `margin` Bytes Kontext, damit Datensätze um einen Treffer vollständig lesbar sind.
+    Läuft auch dort, wo mmap fehlt (Browser/Pyodide), und begrenzt den Speicherbedarf.
+    """
+    import os
+    size = os.path.getsize(path)
+    with open(path, 'rb') as f:
+        base = 0
+        while base < size:
+            lo = max(0, base - margin)
+            hi = min(size, base + chunk + margin)
+            f.seek(lo)
+            buf = f.read(hi - lo)
+            first, last = base - lo, base + chunk - lo
+            for m in pattern.finditer(buf):
+                if m.start() < first:
+                    continue
+                if m.start() >= last:
+                    break
+                yield m, buf, lo
+            base += chunk

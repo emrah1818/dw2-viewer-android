@@ -6,7 +6,8 @@
   <p>A 3D viewer and modding toolkit for Digimon World 2 on PlayStation.</p>
 
   <p><a href="#whats-new-in-v5">What's new in v5</a> · <a href="#neu-in-v5">Neu in v5</a> · <a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
-  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.1.2)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
+  <p><a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>▶ Open the web version (iPhone · iPad · PC)</strong></a> · <a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>Web-Version starten</strong></a></p>
+  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.2.0)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
   <p>
     <img src="assets/v5-metalgreymon.jpg" alt="MetalGreymon on the original DW2 background with shadow" width="200" />
     <img src="assets/v5-andromon-animation.jpg" alt="Andromon playing animation F" width="200" />
@@ -20,6 +21,7 @@ Version 5 turns the viewer into a faithful reproduction of how Digimon World 2 i
 
 | Version | What changed |
 | --- | --- |
+| **5.2** | **Web version** for iPhone, iPad and any desktop browser: https://emrah1818.github.io/dw2-viewer-android/ – same app, no installation. |
 | **5.1.2** | The shadow is drawn like in the game: a bright gradient texture **subtracted** from the background, giving a dark centre with a soft edge. |
 | **5.1.1** | The original shadow model also loads with its smaller texture; the reason is shown in the diagnostics if it cannot be read. |
 | **5.1** | **Green status window** behind the Digimon (semi-transparent green with pixel frame, like the status screen) and the **original shadow** (game model 0x5B) that follows the animation. |
@@ -44,6 +46,19 @@ Version 5 turns the viewer into a faithful reproduction of how Digimon World 2 i
 - **Replace textures** – import PNGs at up to 4× size, compare original/PNG/expected result, stage the change and export a new image.
 - **Export raw files** – export a Digimon's model and assigned animation files as ZIP for analysis.
 - **Adjust the look** – original background on/off, background speed, shadow on/off, plain background colour, floor grid, wireframe and pixel look.
+
+## Web version (iPhone, iPad, PC)
+
+**Start it here: [https://emrah1818.github.io/dw2-viewer-android/](https://emrah1818.github.io/dw2-viewer-android/)**
+
+The web version is the same app as the Android version, running fully in the browser (Safari, Chrome, Edge, Firefox). The Python core runs locally through [Pyodide](https://pyodide.org) (WebAssembly).
+
+- **Your game image stays on your device.** It is opened read-only by the browser; nothing is uploaded. The website contains no game data.
+- **First start** loads about 30 MB (Python, numpy, Pillow) – afterwards the browser caches it.
+- **Add to home screen (iPhone/iPad):** open the link in Safari → Share → *Add to Home Screen*. It then starts full-screen like an app.
+- **Open your image:** *Open BIN / ISO* → choose the file from *Files* (iCloud Drive, On My iPhone, …).
+- **Exports** (PNG, glTF/OBJ, ZIP, projects, new game image) are offered as downloads; on iPhone they appear in *Files → Downloads*.
+- **Limits:** *Overwrite original* is not available (browsers cannot write to the opened file) – use *Export new image* instead. Exporting a complete new image needs a lot of memory; on older iPhones this can fail – a PC/Mac browser or the Android app is more reliable for that step.
 
 ## English
 
@@ -75,8 +90,8 @@ DW2 3D Viewer brings Digimon World 2 model exploration and editing to Android. B
 ### Installation
 
 1. Use an Android **7.0 or newer** device with a supported **64-bit architecture** (`arm64-v8a` or `x86_64`).
-2. Open [the latest release (v5.1.2)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
-3. Download **`DW2_3D_Viewer_v5.1.2.apk`** from the release assets.
+2. Open [the latest release (v5.2.0)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
+3. Download **`DW2_3D_Viewer_v5.2.0.apk`** from the release assets.
 4. Open the APK, allow installation from the downloading app when Android requests it, and install.
 5. Have your own BIN/ISO game image ready. Allow approximately **twice the image size** in free storage for opening and **three times** for saving, as advised in the [guide](ANLEITUNG.md).
 
@@ -173,12 +188,26 @@ Provided Android screenshots / Bereitgestellte Android-Screenshots.
 
 ## Deutsch
 
+### Web-Version (iPhone, iPad, PC)
+
+**Direkt starten: [https://emrah1818.github.io/dw2-viewer-android/](https://emrah1818.github.io/dw2-viewer-android/)**
+
+Die Web-Version ist dieselbe App wie unter Android und läuft komplett im Browser (Safari, Chrome, Edge, Firefox). Der Python-Kern läuft lokal über [Pyodide](https://pyodide.org) (WebAssembly).
+
+- **Dein Spiel-Image bleibt auf deinem Gerät.** Der Browser öffnet es nur lesend, es wird nichts hochgeladen. Die Website enthält keine Spieldaten.
+- **Erster Start** lädt ca. 30 MB (Python, numpy, Pillow), danach nutzt der Browser den Cache.
+- **Zum Home-Bildschirm (iPhone/iPad):** Link in Safari öffnen → Teilen → *Zum Home-Bildschirm*. Danach startet sie im Vollbild wie eine App.
+- **Image öffnen:** *BIN / ISO öffnen* → Datei aus *Dateien* wählen (iCloud Drive, Auf meinem iPhone …).
+- **Exporte** (PNG, glTF/OBJ, ZIP, Projekte, neues Spiel-Image) kommen als Download; auf dem iPhone unter *Dateien → Downloads*.
+- **Grenzen:** *Original überschreiben* gibt es nicht (Browser dürfen die geöffnete Datei nicht ändern) – stattdessen *Neues Image exportieren*. Ein komplettes neues Image braucht viel Arbeitsspeicher; auf älteren iPhones kann das scheitern – dafür ist ein PC/Mac-Browser oder die Android-App zuverlässiger.
+
 ### Neu in v5
 
 Mit Version 5 zeigt der Viewer die Digimon so, wie Digimon World 2 selbst sie zeigt. Grundlage sind der Spielcode (Decompilation [Wyrelade/DW2-PC](https://github.com/Wyrelade/DW2-PC)) und Aufnahmen aus dem Originalspiel.
 
 | Version | Neu |
 | --- | --- |
+| **5.2** | **Web-Version** für iPhone, iPad und jeden Desktop-Browser: https://emrah1818.github.io/dw2-viewer-android/ – dieselbe App, ohne Installation. |
 | **5.1.2** | Schatten wie im Spiel: die helle Verlaufstextur wird vom Hintergrund **abgezogen** – dunkle Mitte, weicher Rand. |
 | **5.1.1** | Das Original-Schattenmodell wird auch mit seiner kleineren Textur geladen; falls nicht, steht der Grund in der Diagnose. |
 | **5.1** | **Grünes Statusfenster** hinter dem Digimon (halbtransparent mit Pixelrahmen) und **Original-Schatten** (Spielmodell 0x5B), der der Animation folgt. |
@@ -229,8 +258,8 @@ Der DW2 3D Viewer bringt das Betrachten und Bearbeiten von Digimon-World-2-Model
 ### Installation
 
 1. Verwende ein Gerät mit **Android 7.0 oder neuer** und unterstützter **64-Bit-Architektur** (`arm64-v8a` oder `x86_64`).
-2. Öffne [das neueste Release (v5.1.2)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
-3. Lade unter den Release-Dateien **`DW2_3D_Viewer_v5.1.2.apk`** herunter.
+2. Öffne [das neueste Release (v5.2.0)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
+3. Lade unter den Release-Dateien **`DW2_3D_Viewer_v5.2.0.apk`** herunter.
 4. Öffne die APK, erlaube bei der Android-Abfrage die Installation durch die herunterladende App und installiere sie.
 5. Halte dein eigenes BIN-/ISO-Spielabbild bereit. Die [Anleitung](ANLEITUNG.md) empfiehlt freien Speicher von ungefähr **zweimal der Image-Größe** zum Öffnen und **dreimal der Größe** zum Speichern.
 

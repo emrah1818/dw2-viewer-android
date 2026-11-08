@@ -7,7 +7,7 @@ Every relocated asset receives its own allocation; donors remain independent.
 """
 from dataclasses import dataclass
 from pathlib import Path
-import json,mmap,re,struct
+import json,re,struct
 from .dw2_file_index import US
 
 NATIVE=re.compile(rb'[A-KM]\d{3}[A-Z0-9]{4}\.BIN;1')
@@ -52,17 +52,20 @@ class NativeLayout:
         finally:disc.close()
         self.file_ids=json.loads((Path(__import__('os').environ.get('DW2_DATA_DIR') or Path(__file__).resolve().parents[2]/'data')/'native_file_ids_us.json').read_text())
         self.records=[]
-        with session.source.open('rb') as handle,mmap.mmap(handle.fileno(),0,access=mmap.ACCESS_READ) as data:
-            for match in NATIVE.finditer(data):
-                start=match.start()-33
+        from .disc import scan_matches
+        total_bytes=__import__('os').path.getsize(session.source)
+        for match,data,off in scan_matches(session.source,NATIVE):
+                start=match.start()+off-33
                 if start<0:continue
                 sector,within=divmod(start,session.sector_size)
                 user=0 if session.sector_size==2048 else 24
                 if not user<=within<user+2048:continue
-                n=data[start];name=match.group();size_name=len(name)
-                if n<33+size_name or within+n>user+2048 or start+n>len(data) or data[start+32]!=size_name or data[start+25]&2:continue
-                lba=struct.unpack_from('<I',data,start+2)[0];size=struct.unpack_from('<I',data,start+10)[0]
-                if struct.unpack_from('>I',data,start+6)[0]!=lba or struct.unpack_from('>I',data,start+14)[0]!=size:continue
+                at=start-off
+                if at<0 or at+33>len(data):continue
+                n=data[at];name=match.group();size_name=len(name)
+                if n<33+size_name or within+n>user+2048 or start+n>total_bytes or data[at+32]!=size_name or data[at+25]&2:continue
+                lba=struct.unpack_from('<I',data,at+2)[0];size=struct.unpack_from('<I',data,at+10)[0]
+                if struct.unpack_from('>I',data,at+6)[0]!=lba or struct.unpack_from('>I',data,at+14)[0]!=size:continue
                 if not size or lba+(size+2047)//2048>self.total:continue
                 self.records.append(Record(sector*2048+within-user,name[:-2].decode(),lba,size))
         # Verify PVD; only data-track BIN/ISO is supported by this writer.
