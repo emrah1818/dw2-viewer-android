@@ -245,6 +245,28 @@ $('#o-wire').onchange = e => { view.wire = e.target.checked; view.applyMaterial(
 $('#o-nearest').onchange = e => { view.nearest = e.target.checked; view.applyMaterial(); };
 $('#o-light').oninput = e => view.setLight(Number(e.target.value));
 $('#o-bg').oninput = e => view.setBackground(e.target.value);
+// ---------------------------------------------------------------- Original-Hintergrund (DW2)
+const prefs = (() => { try { return JSON.parse(localStorage.getItem('dw2bg') || '{}'); } catch { return {}; } })();
+function savePrefs() { try { localStorage.setItem('dw2bg', JSON.stringify(prefs)); } catch { /* optional */ } }
+function applyDw2Background() {
+  const on = prefs.on !== false, speed = prefs.speed || 1;
+  $('#o-dw2bg').checked = on; $('#o-dw2speed').value = speed;
+  $('#stage').classList.toggle('dw2off', !on);
+  $('#stage').style.setProperty('--dw2speed', speed);
+  view.setOriginalBackground(on);
+}
+/** Spielpixel auf ganze Gerätepixel runden: etwa 260 Spielpixel über die Bühnenbreite (Original: 320). */
+function sizeDw2Pixels() {
+  const dpr = window.devicePixelRatio || 1, w = $('#stage').clientWidth || 360;
+  const px = Math.max(1, Math.round(w * dpr / 260)) / dpr;
+  $('#stage').style.setProperty('--px', px);
+  const bar = Math.max(1, Math.round(px * dpr * 0.6)) / dpr;   // Bedienleisten: schmalerer Rahmen
+  for (const el of [$('#viewbar'), $('#animbar')]) el.style.setProperty('--px', bar);
+}
+$('#o-dw2bg').onchange = e => { prefs.on = e.target.checked; savePrefs(); applyDw2Background(); };
+$('#o-dw2speed').oninput = e => { prefs.speed = Number(e.target.value); savePrefs(); applyDw2Background(); };
+new ResizeObserver(sizeDw2Pixels).observe($('#stage'));
+applyDw2Background(); sizeDw2Pixels();
 
 /** Datei aus dem App-Ordner über den Android-Speichern-Dialog ablegen. */
 async function exportFile(promise) {

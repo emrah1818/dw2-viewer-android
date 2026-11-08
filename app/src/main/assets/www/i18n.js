@@ -182,4 +182,7 @@ export const EN = {
   "Bericht exportieren": "Export report",
   "Nur Vorderseiten zeichnen (PS1)": "Draw front faces only (PS1)",
   "Rückseiten": "Back faces",
+  "Original-Hintergrund (Digimon World 2)": "Original background (Digimon World 2)",
+  "Hintergrund-Tempo": "Background speed",
+  "Hintergrundfarbe (ohne Original-Hintergrund)": "Background colour (without original background)",
 };

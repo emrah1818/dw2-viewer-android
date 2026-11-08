@@ -12,8 +12,8 @@ android {
         applicationId = "app.dw2viewer.studio"
         minSdk = 24
         targetSdk = 36
-        versionCode = 420
-        versionName = "4.2.0-test · 3D Viewer – Full Animation Support"
+        versionCode = 500
+        versionName = "5.0"
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 

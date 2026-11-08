@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <title>DW2 3D Viewer</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="dw2bg.css">
 <script type="importmap">
 { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/examples/jsm/" } }
 </script>
@@ -33,8 +34,8 @@
   </section>
 
   <section id="page-view" class="page">
-    <div id="stage"><canvas id="gl"></canvas><div id="stage-msg"></div></div>
-    <div id="viewbar">
+    <div id="stage"><div class="dw2bg" id="dw2bg"><div class="l1"></div><div class="l2l"></div><div class="l2r"></div><div class="l3"></div></div><canvas id="gl"></canvas><div class="dw2frame stage-frame"></div><div id="stage-msg"></div></div>
+    <div id="viewbar" class="dw2win dw2frame">
       <button id="v-prev" aria-label="Zurück">◀</button>
       <div id="v-name">–</div>
       <button id="v-next" aria-label="Weiter">▶</button>
@@ -45,7 +46,7 @@
       <button id="b-redo" class="small" title="Wiederherstellen">↷</button>
       <span id="edit-state" class="hint"></span>
     </div>
-    <div id="animbar">
+    <div id="animbar" class="dw2win dw2frame">
       <select id="anim"></select>
       <button id="play">⏸</button>
       <input id="speed" type="range" min="0.1" max="2" step="0.1" value="1">
@@ -57,12 +58,14 @@
       <label class="row"><input type="checkbox" id="o-blink" checked> <span data-i18n="Augen blinzeln">Augen blinzeln</span></label>
       <label class="row"><input type="checkbox" id="o-smooth"> <span data-i18n="Bewegung glätten (nicht original, Spiel: 30 Bilder/s)">Bewegung glätten (nicht original, Spiel: 30 Bilder/s)</span></label>
       <label class="row"><input type="checkbox" id="o-repeat"> <span data-i18n="Einmal-Animationen wiederholen (nicht original)">Einmal-Animationen wiederholen (nicht original)</span></label>
-      <label class="row"><input type="checkbox" id="o-grid" checked> <span data-i18n="Boden-Raster">Boden-Raster</span></label>
+      <label class="row"><input type="checkbox" id="o-dw2bg" checked> <span data-i18n="Original-Hintergrund (Digimon World 2)">Original-Hintergrund (Digimon World 2)</span></label>
+      <label class="row"><span data-i18n="Hintergrund-Tempo">Hintergrund-Tempo</span> <input type="range" id="o-dw2speed" min="0.25" max="2" step="0.05" value="1"></label>
+      <label class="row"><input type="checkbox" id="o-grid"> <span data-i18n="Boden-Raster">Boden-Raster</span></label>
       <label class="row"><input type="checkbox" id="o-wire"> <span data-i18n="Drahtgitter">Drahtgitter</span></label>
       <label class="row"><input type="checkbox" id="o-nearest" checked> <span data-i18n="Pixel-Look (PS1)">Pixel-Look (PS1)</span></label>
       <label class="row"><input type="checkbox" id="o-prefetch" checked> <span data-i18n="Nachbarmodelle vorbereiten">Nachbarmodelle vorbereiten</span></label>
       <label class="row"><span data-i18n="Licht">Licht</span> <input type="range" id="o-light" min="0.2" max="3" step="0.1" value="1.2"></label>
-      <label class="row"><span data-i18n="Hintergrund">Hintergrund</span> <input type="color" id="o-bg" value="#16243a"></label>
+      <label class="row"><span data-i18n="Hintergrundfarbe (ohne Original-Hintergrund)">Hintergrundfarbe (ohne Original-Hintergrund)</span> <input type="color" id="o-bg" value="#16243a"></label>
     </details>
     <details class="card" id="diag-card">
       <summary data-i18n="Animationskanäle (Diagnose)">Animationskanäle (Diagnose)</summary>

@@ -47,13 +47,15 @@ jobs:
       - name: Build-Kennung
         run: |
           if [ "$GITHUB_REF_NAME" = "main" ]; then
-            echo "APK_NAME=DW2_3D_Viewer_v4.1_test.apk" >> "$GITHUB_ENV"
-            echo "REL_TAG=test-build" >> "$GITHUB_ENV"
-            echo "REL_NAME=Test-APK (neuester Build)" >> "$GITHUB_ENV"
+            echo "APK_NAME=DW2_3D_Viewer_v5.0.apk" >> "$GITHUB_ENV"
+            echo "REL_TAG=v5.0" >> "$GITHUB_ENV"
+            echo "REL_NAME=DW2 Mobile 3D Viewer v5.0 – Original Background Animation" >> "$GITHUB_ENV"
+            echo "REL_PRE=false" >> "$GITHUB_ENV"
           else
             echo "APK_NAME=DW2_3D_Viewer_v4.2_Full_Animation_Support_test.apk" >> "$GITHUB_ENV"
             echo "REL_TAG=test-full-animation-support" >> "$GITHUB_ENV"
-            echo "REL_NAME=3D Viewer – Full Animation Support (Test-Build)" >> "$GITHUB_ENV"
+            echo "REL_NAME=DW2 Mobile 3D Viewer – Test-Build ($GITHUB_REF_NAME)" >> "$GITHUB_ENV"
+            echo "REL_PRE=true" >> "$GITHUB_ENV"
           fi
 
       - uses: gradle/actions/setup-gradle@v4
@@ -74,15 +76,17 @@ jobs:
           name: DW2-3D-Viewer-test-apk
           path: ${{ env.APK_NAME }}
 
-      - name: Test-APK als Download-Seite veröffentlichen (Release "test-build")
+      - name: APK als Release veröffentlichen (main = v5.0, sonst Test-Build)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.REL_TAG }}
           name: ${{ env.REL_NAME }}
-          prerelease: true
+          prerelease: ${{ env.REL_PRE }}
+          make_latest: ${{ env.REL_PRE == 'false' }}
           target_commitish: ${{ github.sha }}
           files: ${{ env.APK_NAME }}
-          body: Automatischer Test-Build (${{ github.ref_name }}, ${{ github.sha }}). Auf dem Handy herunterladen und installieren. Keine finale Veröffentlichung.
+          body: |
+            ${{ env.REL_PRE == 'false' && 'Version 5.0 – vollständige Animationsunterstützung, PS1-Darstellung (Rückseiten, Mischmodi), adaptives App-Symbol und Original-Hintergrund von Digimon World 2. Auf dem Handy herunterladen und installieren.' || format('Automatischer Test-Build ({0}, {1}). Keine finale Veröffentlichung.', github.ref_name, github.sha) }}
 
       # Für die Veröffentlichung: signiertes Release-Bundle, nur wenn die Secrets gesetzt sind.
       - name: Release-Signatur vorbereiten

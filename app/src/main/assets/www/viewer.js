@@ -11,11 +11,13 @@ const ABR_LABEL = ['50 % (B/2+F/2)', 'additiv (B+F)', 'subtraktiv (B−F)', 'B+F
 export class Viewer {
   constructor(canvas) {
     this.canvas = canvas;
-    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    this.renderer.setClearColor(0x000000, 0);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x16243a);
+    this.bgColor = new THREE.Color(0x16243a);
+    this.scene.background = null;   // Original-DW2-Hintergrund liegt als CSS-Ebenen hinter der Leinwand
     this.camera = new THREE.PerspectiveCamera(40, 1, 0.01, 5000);
     this.controls = new OrbitControls(this.camera, canvas);
     this.controls.enableDamping = true;
@@ -25,6 +27,7 @@ export class Viewer {
     this.fill = new THREE.DirectionalLight(0xaac4ff, 0.5); this.fill.position.set(-4, 2, -3);
     this.scene.add(this.ambient, this.key, this.fill);
     this.grid = new THREE.GridHelper(10, 20, 0x3a5578, 0x24374f);
+    this.grid.visible = false;   // Boden-Raster: im Original-Hintergrund nicht vorhanden (Ansicht → Boden-Raster)
     this.scene.add(this.grid);
     this.clock = new THREE.Clock();
     this.loader = new GLTFLoader();
@@ -364,6 +367,8 @@ export class Viewer {
   }
 
   setLight(v) { this.key.intensity = v; this.ambient.intensity = 0.4 + v * 0.4; }
-  setBackground(hex) { this.scene.background = new THREE.Color(hex); }
+  setBackground(hex) { this.bgColor = new THREE.Color(hex); if (this.scene.background) this.scene.background = this.bgColor; }
+  /** true: transparente Leinwand über dem DW2-Hintergrund; false: einfarbig. */
+  setOriginalBackground(on) { this.scene.background = on ? null : this.bgColor; }
 }
 

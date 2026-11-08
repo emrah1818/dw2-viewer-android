@@ -132,6 +132,19 @@ def main():
         page.screenshot(path=SHOTS / 'a2_betamon.png')
         page.click('#v-prev'); wait_model()
         step('Zurück zu Agumon ohne Fehler', ev('window.__dw2view.native.payload.texanim.cycles') == 1)
+        # Original-Hintergrund (DW2): Zeilen gegenläufig, transparente Leinwand, abschaltbar
+        tx = "() => ['.l2l','.l2r'].map(c => new DOMMatrix(getComputedStyle(document.querySelector('#dw2bg ' + c)).transform).m41)"
+        a1 = ev(tx); page.wait_for_timeout(500); a2 = ev(tx)
+        step('Hintergrund: Zeile 1/3 nach links, Zeile 2 nach rechts', a2[0] < a1[0] and a2[1] > a1[1], f'{a1} → {a2}')
+        px = ev("parseFloat(document.querySelector('#stage').style.getPropertyValue('--px'))")
+        step('Hintergrund: ganze Gerätepixel je Spielpixel', px > 0 and abs(px * 2 - round(px * 2)) < 1e-6, str(px))
+        step('Leinwand transparent über dem Hintergrund', ev('window.__dw2view.scene.background === null'))
+        page.screenshot(path=SHOTS / 'a0_hintergrund.png')
+        page.click('#view-settings summary') if not page.is_visible('#o-dw2bg') else None
+        page.uncheck('#o-dw2bg'); page.wait_for_timeout(100)
+        step('Hintergrund abschaltbar (einfarbig)', ev("getComputedStyle(document.querySelector('#dw2bg')).display") == 'none'
+             and ev('window.__dw2view.scene.background !== null'))
+        page.check('#o-dw2bg')
         # Animationsprüfung
         page.click('.tab[data-page="page-more"]'); page.click('#b-audit'); idle()
         page.wait_for_selector('#modal-box h3')
