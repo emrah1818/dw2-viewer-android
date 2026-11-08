@@ -350,6 +350,7 @@ export class Viewer {
     if (!this.model) return;
     this.model.traverse(o => {
       if (!o.isMesh) return;
+      if (o.userData.dw2Shadow) { o.material.wireframe = this.wire; if (o.material.map) this.filter(o.material.map); return; }
       (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => {
         const native = this.native && m.userData?.clut !== undefined;
         m.side = native && this.channels.cull ? this.native.cullSide : THREE.DoubleSide;
@@ -380,9 +381,27 @@ export class Viewer {
     sh.name = 'dw2_shadow';
     sh.traverse(o => {
       if (!o.isMesh) return;
-      const m = o.material.clone();
-      // Modus 1 = undurchsichtig: auch STP-Texel (Alpha 127) deckend zeichnen, nur 0x0000 ist durchsichtig.
-      m.transparent = false; m.alphaTest = 0.25; m.depthWrite = false; m.side = THREE.DoubleSide;
+      const src = o.material, ud = src.userData || {};
+      // Gfx_AddQuadsGT4/GT3: STP-Texel der halbtransparenten Flächen werden mit dem ABR-Modus
+      // gemischt; der Schatten nutzt eine helle Verlaufstextur mit Modus 2 (Hintergrund − Textur).
+      // Die Leinwand ist durchsichtig über dem CSS-Hintergrund, daher wird „minus Textur“ als
+      // schwarze Abdunklung mit der Texturhelligkeit als Deckkraft gezeichnet.
+      const m = new THREE.MeshBasicMaterial({ map: src.map, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+      const abr = { value: ud.semi_transparent ? (ud.abr | 0) : -1 };
+      m.onBeforeCompile = shader => {
+        shader.uniforms.dw2Abr = abr;
+        shader.fragmentShader = 'uniform int dw2Abr;\n' + shader.fragmentShader
+          .replace('#include <map_fragment>', '#include <map_fragment>\n  vec4 dw2t = diffuseColor;\n  if (dw2t.a < 0.25) discard;')
+          .replace('#include <dithering_fragment>', `#include <dithering_fragment>
+  if (dw2Abr >= 0 && dw2t.a <= 0.75) {
+    vec3 c = pow(clamp(dw2t.rgb, 0.0, 1.0), vec3(0.4545));
+    float l = max(max(c.r, c.g), c.b);
+    if (dw2Abr == 2) gl_FragColor = vec4(0.0, 0.0, 0.0, l);
+    else if (dw2Abr == 0) gl_FragColor = vec4(gl_FragColor.rgb, 0.5);
+    else gl_FragColor = vec4(gl_FragColor.rgb, l);
+  } else gl_FragColor.a = 1.0;`);
+      };
+      m.customProgramCacheKey = () => 'dw2shadow';
       m.polygonOffset = true; m.polygonOffsetFactor = 1; m.polygonOffsetUnits = 4;
       if (m.map) this.filter(m.map);
       o.material = m; o.renderOrder = -1; o.userData.dw2Shadow = true;

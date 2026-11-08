@@ -6,7 +6,7 @@
   <p>A 3D viewer and modding toolkit for Digimon World 2 on PlayStation.</p>
 
   <p><a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
-  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.1.1)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
+  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.1.2)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
 </div>
 
 ## English
@@ -23,8 +23,8 @@ DW2 3D Viewer brings Digimon World 2 model exploration and editing to Android. B
 | --- | --- |
 | Digimon browser | Search and select Digimon from the loaded image. |
 | Interactive 3D viewer | Rotate, zoom and pan; select animations, adjust playback speed and reset the camera. Grid, wireframe, pixel look, lighting and background controls are available. |
-| Full animation support (v5.1.1) | Game-accurate playback reconstructed from the game code: 30 fps bone keys with loop points and one-shot holds, eye blinking, texture animations (VRAM copies), PS1 blend modes and animation files shared via MODELDT. Diagnostics per channel and an animation check of all models. See [ANIMATION_ANALYSE.md](ANIMATION_ANALYSE.md). |
-| Original background (v5.1.1) | The animated Digimon World 2 menu background behind the 3D model: dark blue base, DigiCode rows moving in alternating directions, turquoise grid and DW2-style window frames. See [HINTERGRUND_DW2.md](HINTERGRUND_DW2.md). |
+| Full animation support (v5.1.2) | Game-accurate playback reconstructed from the game code: 30 fps bone keys with loop points and one-shot holds, eye blinking, texture animations (VRAM copies), PS1 blend modes and animation files shared via MODELDT. Diagnostics per channel and an animation check of all models. See [ANIMATION_ANALYSE.md](ANIMATION_ANALYSE.md). |
+| Original background (v5.1.2) | The animated Digimon World 2 menu background behind the 3D model: dark blue base, DigiCode rows moving in alternating directions, turquoise grid and DW2-style window frames. See [HINTERGRUND_DW2.md](HINTERGRUND_DW2.md). |
 | Texture editing | Export PNG textures at 1×–4× scale, preview replacement PNGs, replace eye textures and choose palette/downscaling settings. The v3.1 palette mode is the default. |
 | Model exchange | Export GLB/glTF with bones and animations; preview imported GLB/glTF/OBJ files and use the model replacement tools, including bone mapping. |
 | Game-data editor | Edit names, type, specialty, battle techniques, enemy statistics and EXP. |
@@ -37,8 +37,8 @@ DW2 3D Viewer brings Digimon World 2 model exploration and editing to Android. B
 ### Installation
 
 1. Use an Android **7.0 or newer** device with a supported **64-bit architecture** (`arm64-v8a` or `x86_64`).
-2. Open [the latest release (v5.1.1)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
-3. Download **`DW2_3D_Viewer_v5.1.1.apk`** from the release assets.
+2. Open [the latest release (v5.1.2)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
+3. Download **`DW2_3D_Viewer_v5.1.2.apk`** from the release assets.
 4. Open the APK, allow installation from the downloading app when Android requests it, and install.
 5. Have your own BIN/ISO game image ready. Allow approximately **twice the image size** in free storage for opening and **three times** for saving, as advised in the [guide](ANLEITUNG.md).
 
@@ -139,8 +139,8 @@ Der DW2 3D Viewer bringt das Betrachten und Bearbeiten von Digimon-World-2-Model
 ### Installation
 
 1. Verwende ein Gerät mit **Android 7.0 oder neuer** und unterstützter **64-Bit-Architektur** (`arm64-v8a` oder `x86_64`).
-2. Öffne [das neueste Release (v5.1.1)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
-3. Lade unter den Release-Dateien **`DW2_3D_Viewer_v5.1.1.apk`** herunter.
+2. Öffne [das neueste Release (v5.1.2)](https://github.com/emrah1818/dw2-viewer-android/releases/latest).
+3. Lade unter den Release-Dateien **`DW2_3D_Viewer_v5.1.2.apk`** herunter.
 4. Öffne die APK, erlaube bei der Android-Abfrage die Installation durch die herunterladende App und installiere sie.
 5. Halte dein eigenes BIN-/ISO-Spielabbild bereit. Die [Anleitung](ANLEITUNG.md) empfiehlt freien Speicher von ungefähr **zweimal der Image-Größe** zum Öffnen und **dreimal der Größe** zum Speichern.
 
