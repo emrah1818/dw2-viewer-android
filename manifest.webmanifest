@@ -1,0 +1,29 @@
+{
+ "name": "DW2 3D Viewer",
+ "short_name": "DW2 Viewer",
+ "start_url": "./",
+ "scope": "./",
+ "display": "standalone",
+ "orientation": "portrait",
+ "background_color": "#0f1929",
+ "theme_color": "#0f1929",
+ "description": "Digimon World 2 – 3D-Modelle, Animationen und Texturen im Browser (eigenes BIN/ISO nötig).",
+ "icons": [
+  {
+   "src": "web/icon-192.png",
+   "sizes": "192x192",
+   "type": "image/png"
+  },
+  {
+   "src": "web/icon-512.png",
+   "sizes": "512x512",
+   "type": "image/png"
+  },
+  {
+   "src": "web/icon-maskable-512.png",
+   "sizes": "512x512",
+   "type": "image/png",
+   "purpose": "maskable"
+  }
+ ]
+}
