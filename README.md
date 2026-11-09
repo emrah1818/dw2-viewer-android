@@ -5,7 +5,7 @@
   <p><strong>Explore. Animate. Customize.</strong></p>
   <p>A 3D viewer and modding toolkit for Digimon World 2 on PlayStation.</p>
 
-  <p><a href="#whats-new-in-v5">What's new in v5</a> · <a href="#neu-in-v5">Neu in v5</a> · <a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
+  <p><a href="#whats-new-in-v5">What's new in v5</a> · <a href="#neu-in-v5">Neu in v5</a> · <a href="#modding-example-omnimon-zwart">Modding example</a> · <a href="#modding-beispiel-omnimon-zwart">Modding-Beispiel</a> · <a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
   <p><a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>▶ Open the web version (iPhone · iPad · PC)</strong></a> · <a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>Web-Version starten</strong></a></p>
   <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.2.0)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
   <p>
@@ -37,6 +37,34 @@ Version 5 turns the viewer into a faithful reproduction of how Digimon World 2 i
 <p align="center"><img src="assets/v5-texture-preview.jpg" alt="Texture replacement preview with original, PNG and expected result" width="260" /></p>
 
 4. **Texture replacement preview.** Before anything is staged you see three images side by side: *original in the game*, *your PNG* and the *expected result in the game*. The app reports how it adapted the PNG – here a 512×1024 PNG was reduced 4× to the game's 128×256, the mean colour error is 2/255 with 0.0 % strong deviations, 6 palettes were changed with 89 new palette colours, and the eye poses are written as well. Only if the right-hand image matches your colours do you confirm with *„Farben stimmen – vormerken“*; the original BIN stays untouched.
+
+### Modding example: Omnimon Zwart
+
+A complete mod made on the phone and tested in the real game: Omnimon gets a new black texture, a new name, a new type and specialty, and the result runs in the game.
+
+<table>
+  <tr>
+    <th>Video (click to play, 69 s)</th>
+    <th>Result in the game</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/emrah1818/dw2-viewer-android/raw/main/assets/modding-demo-omnimon.mp4"><img src="assets/modding-demo-omnimon.gif" alt="Short preview: importing a black PNG texture for Omnimon" width="240" /></a></td>
+    <td align="center"><img src="assets/modding-ingame-omnimon-zwart.jpg" alt="Digimon World 2 status screen: Omnimon Zwart, black texture, type Virus, specialty Darkness" width="420" /></td>
+  </tr>
+</table>
+
+What happens in the video ([full video, MP4](https://github.com/emrah1818/dw2-viewer-android/raw/main/assets/modding-demo-omnimon.mp4); waiting times are sped up):
+
+1. **Open BIN / ISO** → choose your own *Digimon World 2 (USA)* image.
+2. Search **Omnimon** in the Digimon list and open it.
+3. **Textures → Import PNG / replace texture** → choose an edited PNG (here a black recolour, 512×1024).
+4. Check the **preview before staging** (original · your PNG · expected result) and confirm with *„Farben stimmen – vormerken“*. The model in the viewer turns black right away.
+5. **Edit → Name**: rename to *Omnimon Zwart* (max. 13 characters) → *Apply*.
+6. **Edit → Type & specialty**: type *Virus* (originally Vaccine), specialty *Darkness* (originally none) → *Apply*.
+7. Optionally look at attacks and enemy stats.
+8. **Changes** shows the three staged files (texture in `M150OMGM.BIN`, name in `MODELDT0.BIN`, type/specialty in `DIGIMNDT.BIN`) → **Export new image** with a new file name. The original BIN stays untouched.
+
+The screenshot on the right was taken in the game with the exported image: the status screen shows the black Omnimon with the new name, type *Virus* and specialty *Darkness*.
 
 ### What you can do with v5
 
@@ -182,6 +210,12 @@ Provided Android screenshots / Bereitgestellte Android-Screenshots.
   <tr>
     <td colspan="3" align="center"><img src="assets/v5-texture-preview.jpg" alt="Original, PNG and expected result side by side with colour statistics" width="240" /></td>
   </tr>
+  <tr>
+    <th colspan="3">Modding: Omnimon Zwart in the game / im Spiel</th>
+  </tr>
+  <tr>
+    <td colspan="3" align="center"><img src="assets/modding-ingame-omnimon-zwart.jpg" alt="Omnimon Zwart with black texture on the in-game status screen" width="480" /></td>
+  </tr>
 </table>
 
 ---
@@ -220,6 +254,34 @@ Mit Version 5 zeigt der Viewer die Digimon so, wie Digimon World 2 selbst sie ze
 2. **Andromon – Animation F (Spiel-ID 50).** Die Statuszeile zeigt Spiel-ID, Bild (57/75) und „Schleife ab Bild 60“: Die Animation spielt einmal einen Anfang und wiederholt dann ab Bild 60 – genau wie in den Spieldaten. Der Schatten folgt dem Körper.
 3. **Andromon – ersetzte Textur.** Eine umgefärbte PNG (Gold statt Grau) wurde importiert; das Modell zeigt das Ergebnis sofort. Der Status lautet „geändert · vorgemerkt“, unter **Änderungen** erscheint der Zähler – bereit für ein neues Spielabbild.
 4. **Vorschau beim Texturersatz** (Bild unten im Abschnitt *Screenshots*). Vor dem Vormerken stehen *Original im Spiel*, *deine PNG* und *erwartetes Ergebnis im Spiel* nebeneinander. Die App zeigt, wie sie die PNG angepasst hat: hier 512×1024 auf 128×256 verkleinert (4×), mittlerer Farbfehler 2/255, 0,0 % starke Abweichungen, 6 geänderte Paletten mit 89 neuen Farben, Augenposen werden mitgeschrieben. Erst wenn das rechte Bild stimmt, bestätigst du mit „Farben stimmen – vormerken“; die Original-BIN bleibt unverändert.
+
+#### Modding-Beispiel: Omnimon Zwart
+
+Ein kompletter Mod, am Handy erstellt und im echten Spiel getestet: Omnimon bekommt eine neue schwarze Textur, einen neuen Namen, neuen Typ und neues Spezialgebiet – und das Ergebnis läuft im Spiel.
+
+<table>
+  <tr>
+    <th>Video (anklicken zum Abspielen, 69 s)</th>
+    <th>Ergebnis im Spiel</th>
+  </tr>
+  <tr>
+    <td align="center"><a href="https://github.com/emrah1818/dw2-viewer-android/raw/main/assets/modding-demo-omnimon.mp4"><img src="assets/modding-demo-omnimon.gif" alt="Kurze Vorschau: schwarze PNG-Textur für Omnimon importieren" width="240" /></a></td>
+    <td align="center"><img src="assets/modding-ingame-omnimon-zwart.jpg" alt="Statusbildschirm in Digimon World 2: Omnimon Zwart, schwarze Textur, Typ Virus, Spezialgebiet Darkness" width="420" /></td>
+  </tr>
+</table>
+
+Ablauf im Video ([ganzes Video als MP4](https://github.com/emrah1818/dw2-viewer-android/raw/main/assets/modding-demo-omnimon.mp4); Wartezeiten sind beschleunigt):
+
+1. **BIN / ISO öffnen** → eigenes Abbild *Digimon World 2 (USA)* auswählen.
+2. In der Digimon-Liste **Omnimon** suchen und öffnen.
+3. **Texturen → PNG importieren / Textur ersetzen** → bearbeitete PNG wählen (hier schwarz umgefärbt, 512×1024).
+4. **Vorschau vor dem Vormerken** prüfen (Original · deine PNG · erwartetes Ergebnis) und mit „Farben stimmen – vormerken“ bestätigen. Das Modell im Viewer wird sofort schwarz.
+5. **Bearbeiten → Name**: in *Omnimon Zwart* umbenennen (max. 13 Zeichen) → *Übernehmen*.
+6. **Bearbeiten → Typ & Specialty**: Typ *Virus* (original Vaccine), Specialty *Darkness* (original keins) → *Übernehmen*.
+7. Optional Attacken und Gegnerwerte ansehen.
+8. Unter **Änderungen** stehen drei vorgemerkte Dateien (Textur in `M150OMGM.BIN`, Name in `MODELDT0.BIN`, Typ/Specialty in `DIGIMNDT.BIN`) → **Neues Image exportieren** mit neuem Dateinamen. Die Original-BIN bleibt unverändert.
+
+Der Screenshot rechts stammt aus dem Spiel mit dem exportierten Abbild: Der Statusbildschirm zeigt das schwarze Omnimon mit neuem Namen, Typ *Virus* und Specialty *Darkness*.
 
 #### Was mit v5 möglich ist
 
