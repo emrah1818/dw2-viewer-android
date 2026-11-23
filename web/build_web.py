@@ -19,8 +19,13 @@ if OUT.exists():
     shutil.rmtree(OUT)
 shutil.copytree(WWW, OUT)
 (OUT / 'web').mkdir()
-for name in ('bridge.js', 'worker.js', 'web.css'):
+for name in ('bridge.js', 'worker.js', 'web.css', 'dw3conv_run.js'):
     shutil.copy(ROOT / 'web' / name, OUT / 'web' / name)
+# DW3-Konverter als WebAssembly (vorher: tools/build_dw3conv.sh wasm)
+DW3CONV = ROOT / 'build' / 'dw3conv' / 'dw3conv.js'
+if not DW3CONV.is_file():
+    raise SystemExit('build/dw3conv/dw3conv.js fehlt: zuerst tools/build_dw3conv.sh wasm ausführen (Emscripten).')
+shutil.copy(DW3CONV, OUT / 'web' / 'dw3conv.js')
 
 with zipfile.ZipFile(OUT / 'py.zip', 'w', zipfile.ZIP_DEFLATED) as z:
     for f in sorted(PY.rglob('*.py')):
@@ -42,9 +47,9 @@ for size, name in ((512, 'icon-512.png'), (192, 'icon-192.png'), (180, 'apple-to
 full.resize((512, 512), Image.LANCZOS).convert('RGB').save(OUT / 'web' / 'icon-maskable-512.png')
 
 (OUT / 'manifest.webmanifest').write_text(json.dumps({
-    'name': 'DW2 3D Viewer', 'short_name': 'DW2 Viewer', 'start_url': './', 'scope': './',
+    'name': 'DW2 Mod Studio', 'short_name': 'DW2 Studio', 'start_url': './', 'scope': './',
     'display': 'standalone', 'orientation': 'portrait', 'background_color': '#0f1929', 'theme_color': '#0f1929',
-    'description': 'Digimon World 2 – 3D-Modelle, Animationen und Texturen im Browser (eigenes BIN/ISO nötig).',
+    'description': 'Digimon World 2 Mod Studio – 3D-Modelle, Animationen, DW3-Import, DNA-Digitation und Mods im Browser (eigenes BIN/ISO nötig).',
     'icons': [{'src': 'web/icon-192.png', 'sizes': '192x192', 'type': 'image/png'},
               {'src': 'web/icon-512.png', 'sizes': '512x512', 'type': 'image/png'},
               {'src': 'web/icon-maskable-512.png', 'sizes': '512x512', 'type': 'image/png', 'purpose': 'maskable'}],
@@ -57,7 +62,7 @@ head = f'''<link rel="manifest" href="manifest.webmanifest">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="DW2 Viewer">
+<meta name="apple-mobile-web-app-title" content="DW2 Studio">
 <meta name="theme-color" content="#0f1929">
 <link rel="stylesheet" href="web/web.css">
 <script>window.DW2_VERSION = {json.dumps(version)};</script>

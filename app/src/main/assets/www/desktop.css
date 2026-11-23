@@ -1,0 +1,38 @@
+/* Desktop layout: persistent catalogue and stage, tools in a separate column. */
+:root{--blue:#218b68;--line:#315652;--btn:#193d3c}
+header#top{padding:12px 20px}#title b{font-size:19px}
+button{cursor:pointer}button:hover:not(:disabled){filter:brightness(1.16)}
+#modal{align-items:center;justify-content:center}#modal-box{max-width:1000px;width:90%;border-radius:14px;max-height:90vh}
+#toast{left:25%;right:25%}
+@media(min-width:1000px){
+ main{display:grid;grid-template-columns:260px minmax(380px,1fr) 340px;gap:10px;padding:10px;}
+ .page{position:relative;inset:auto;min-height:0;}
+ #page-list{display:block;grid-column:1;grid-row:1;padding:0;}
+ #page-view{display:block;grid-column:2;grid-row:1;overflow-y:auto;}
+ #page-tools.active,#page-edit.active,#page-changes.active,#page-more.active{grid-column:3;grid-row:1;padding:0;}
+ #start.active{grid-column:2/4;grid-row:1;z-index:3;background:var(--bg);}
+ #stage{height:calc(100vh - 300px);min-height:300px;}
+ #list .item{padding:9px 8px;cursor:pointer;}
+ #list .cd{display:none}#list .id{width:34px;}
+ nav#tabs{justify-content:center;padding:0 20%;}
+ .tab{flex-direction:row;justify-content:center;gap:8px;padding:12px;}
+ .tab span{font-size:14px;}
+ #page-view details.card{margin-top:10px;}
+}
+@media(min-width:1500px){main{grid-template-columns:290px minmax(420px,1fr) 410px;}}
+
+/* 0.17b: Tabellen der Editoren, Prüfbericht */
+.tablebox{max-height:52vh;overflow:auto;margin-top:8px}
+.tablebox table,#mod-report table,#dw3-batch table{border-collapse:collapse;width:100%;font-size:13px}
+.tablebox td,.tablebox th,#mod-report td,#mod-report th,#dw3-batch td{padding:3px 6px;border-bottom:1px solid var(--line);text-align:left}
+tr.edited td{color:#9fe3c4}
+#mod-report .err,#evo-report .err{color:#ff9a8a}#mod-report .warn,#evo-report .warn{color:#ffd27a}
+#tabs .tab span{font-size:11px}
+#page-domains .row select,#page-evo .row select{max-width:240px}
+#page-domains input[type=number],#page-evo input[type=number]{width:80px}
+
+#cam-overlay{position:absolute;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;background:rgba(10,20,40,.85);border:1px solid #3c6cb0;border-radius:6px;padding:6px 10px;color:#dfe9ff;font-size:13px;white-space:nowrap}
+#bc-box input[type=number]{width:72px}#bc-box .warn{color:#ffd27a}
+
+.mode-banner { margin: .4em 0; padding: .5em .7em; border-left: 4px solid var(--accent, #4a9); background: rgba(80,160,120,.12); }
+.mode-group { margin: .6em 0; padding: .4em .6em; border: 1px solid rgba(128,128,128,.35); border-radius: 6px; }

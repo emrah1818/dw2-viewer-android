@@ -1,0 +1,13 @@
+/* 6.0: Handy-/Tablet-Hochformat (Android-App, Web-Version auf iPhone/iPad). Das Mod Studio hat
+   elf Bereiche: die Leiste unten lässt sich wischen, die Kopfzeile bleibt einzeilig. */
+@media (max-width:999px){
+ header#top{gap:8px;padding:8px 10px}
+ #title b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ header#top button.small{padding:7px 10px;white-space:nowrap;flex:0 0 auto}
+ nav#tabs{overflow-x:auto;overscroll-behavior-x:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+ nav#tabs::-webkit-scrollbar{display:none}
+ nav#tabs .tab{flex:0 0 auto;min-width:72px;padding:6px 8px}
+ nav#tabs .tab span{white-space:nowrap}
+ .tablebox{max-height:60vh}
+ #modal-box{width:96%;max-height:92vh}
+}

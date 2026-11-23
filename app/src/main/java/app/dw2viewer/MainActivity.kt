@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -171,15 +172,24 @@ class MainActivity : AppCompatActivity() {
     /** Kopiert die gewählte Datei in den App-Speicher und übergibt sie an Python. */
     private fun handlePicked(id: String, kind: String, uri: Uri) {
         try {
-            val folder = File(filesDir, if (kind == "image") "images" else "imports").apply { mkdirs() }
+            val folder = File(filesDir, when (kind) { "image" -> "images"; "dw3" -> "dw3images"; else -> "imports" }).apply { mkdirs() }
             val name = (query(uri, OpenableColumns.DISPLAY_NAME) ?: "datei").replace(Regex("[^A-Za-z0-9._ -]"), "_")
             val size = query(uri, OpenableColumns.SIZE)?.toLongOrNull() ?: -1L
-            if (kind == "image") folder.listFiles()?.forEach { it.delete() }   // nur ein Image gleichzeitig
+            val target = File(folder, name)
+            // DW3-Abbild (wird nie verändert): dieselbe Datei nicht erneut kopieren (mehrere hundert MB).
+            val stamp = "$uri|$size|" + (runCatching { query(uri, DocumentsContract.Document.COLUMN_LAST_MODIFIED) }.getOrNull() ?: "")
+            val stampFile = File(folder, ".quelle")
+            if (kind == "dw3" && size > 0 && target.isFile && target.length() == size &&
+                stampFile.isFile && stampFile.readText() == stamp) {
+                progress("DW3-Dateien werden gesucht …", -1)
+                resolve(id, py.call("open_dw3", JSONArray().put(target.absolutePath).toString()))
+                return
+            }
+            if (kind == "image" || kind == "dw3") folder.listFiles()?.forEach { it.delete() }   // nur ein Image gleichzeitig
             if (size > 0 && folder.usableSpace < size + (64L shl 20)) {
                 resolve(id, error("Zu wenig Speicherplatz: ${size shr 20} MB nötig, ${folder.usableSpace shr 20} MB frei."))
                 return
             }
-            val target = File(folder, name)
             var copied = 0L
             var last = -1
             contentResolver.openInputStream(uri)!!.use { input ->
@@ -195,6 +205,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            if (kind == "dw3") stampFile.writeText(stamp)
             if (kind == "image") {
                 imageUri = uri
                 imagePath = target.absolutePath
@@ -206,8 +217,8 @@ class MainActivity : AppCompatActivity() {
                 resolve(id, ok(JSONObject().put("path", target.absolutePath).put("name", name)))
                 return
             }
-            val method = when (kind) { "image" -> "open_image"; "roster" -> "roster_open"; else -> "load_project" }
-            progress(if (kind == "image") "Image wird analysiert …" else "Datei wird gelesen …", -1)
+            val method = when (kind) { "image" -> "open_image"; "dw3" -> "open_dw3"; "roster" -> "roster_open"; else -> "load_project" }
+            progress(when (kind) { "image" -> "Image wird analysiert …"; "dw3" -> "DW3-Dateien werden gesucht …"; else -> "Datei wird gelesen …" }, -1)
             resolve(id, py.call(method, JSONArray().put(target.absolutePath).toString()))
         } catch (e: Throwable) {
             resolve(id, error(e.message ?: e.javaClass.simpleName))
@@ -223,7 +234,7 @@ class MainActivity : AppCompatActivity() {
                     val exported = JSONArray(argsJson).getString(0)
                     pool.execute { overwriteOriginal(id, exported) }
                 }
-                "pick_image", "pick_roster", "pick_project", "pick_file" -> runOnUiThread {
+                "pick_image", "pick_dw3", "pick_roster", "pick_project", "pick_file" -> runOnUiThread {
                     pendingPick = id to method.removePrefix("pick_")
                     pickFile.launch(arrayOf("*/*"))
                 }

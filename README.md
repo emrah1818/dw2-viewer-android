@@ -1,19 +1,30 @@
 <div align="center">
   <img src="app/src/main/assets/www/logo.png" alt="DW2 3D Viewer logo" width="200" />
 
-  <h1>DW2 3D Viewer — Android</h1>
+  <h1>DW2 Mod Studio — Android &amp; Web</h1>
   <p><strong>Explore. Animate. Customize.</strong></p>
-  <p>A 3D viewer and modding toolkit for Digimon World 2 on PlayStation.</p>
+  <p>The mobile version of the DW2 Mod Studio: a 3D viewer and modding toolkit for Digimon World 2 on PlayStation.</p>
 
-  <p><a href="#whats-new-in-v5">What's new in v5</a> · <a href="#neu-in-v5">Neu in v5</a> · <a href="#modding-example-omnimon-zwart">Modding example</a> · <a href="#modding-beispiel-omnimon-zwart">Modding-Beispiel</a> · <a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
+  <p><a href="#whats-new-in-v60">What's new in v6.0</a> · <a href="#neu-in-v60">Neu in v6.0</a> · <a href="#whats-new-in-v5">What's new in v5</a> · <a href="#neu-in-v5">Neu in v5</a> · <a href="#modding-example-omnimon-zwart">Modding example</a> · <a href="#modding-beispiel-omnimon-zwart">Modding-Beispiel</a> · <a href="#english">English</a> · <a href="#deutsch">Deutsch</a> · <a href="#screenshots">Screenshots</a></p>
   <p><a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>▶ Open the web version (iPhone · iPad · PC)</strong></a> · <a href="https://emrah1818.github.io/dw2-viewer-android/"><strong>Web-Version starten</strong></a></p>
-  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v5.2.0)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
+  <p><a href="https://github.com/emrah1818/dw2-viewer-android/releases/latest">Download APK (v6.0)</a> · <a href="ANLEITUNG.md">Detailed guide / Anleitung</a> · <a href="https://github.com/emrah1818/dw2-viewer-android/issues">Report an issue</a></p>
   <p>
     <img src="assets/v5-metalgreymon.jpg" alt="MetalGreymon on the original DW2 background with shadow" width="200" />
     <img src="assets/v5-andromon-animation.jpg" alt="Andromon playing animation F" width="200" />
     <img src="assets/v5-andromon-texture.jpg" alt="Andromon with a replaced texture" width="200" />
   </p>
 </div>
+
+## What's new in v6.0
+
+Version 6.0 brings the functions of the desktop **DW2 Mod Studio 0.99** to Android and the web version. The mobile version edits **your PS1 image (BIN/ISO) only**; it does not create PC-port mods.
+
+- **Digimon from Digimon World 3:** open your own DW3 / DW2003 disc image, view its models and replace DW2 Digimon slots with them (skeleton, geometry, texture and motions; single or batch import). The DW3 converter runs on the phone (Android NDK) and in the browser (WebAssembly).
+- **Digivolution editor:** edit digivolution lines (targets, DP bounds, stage) and each Digimon's DNA group.
+- **DNA digivolution in the image:** choose partner A + B, result and stage. The rule is written into the Digi-Lab's own DNA table of the game (STAG2000.PRO, USA version), so it works in any PS1 emulator. The app shows which other pairs share the same table cell in the game.
+- **Animation editor**, attack editor, domains and enemy groups, file explorer, mod projects with undo/redo.
+- New layout with all eleven areas in a swipeable bar. The app is now called **DW2 Mod Studio**.
+- Only available in the PC Mod Studio: PC-port mods, HD texture packs, per-Digimon digivolve levels and battle cameras of the PC port, opening `dw2.pak`.
 
 ## What's new in v5
 
@@ -234,6 +245,17 @@ Die Web-Version ist dieselbe App wie unter Android und läuft komplett im Browse
 - **Image öffnen:** *BIN / ISO öffnen* → Datei aus *Dateien* wählen (iCloud Drive, Auf meinem iPhone …).
 - **Exporte** (PNG, glTF/OBJ, ZIP, Projekte, neues Spiel-Image) kommen als Download; auf dem iPhone unter *Dateien → Downloads*.
 - **Grenzen:** *Original überschreiben* gibt es nicht (Browser dürfen die geöffnete Datei nicht ändern) – stattdessen *Neues Image exportieren*. Ein komplettes neues Image braucht viel Arbeitsspeicher; auf älteren iPhones kann das scheitern – dafür ist ein PC/Mac-Browser oder die Android-App zuverlässiger.
+
+### Neu in v6.0
+
+Version 6.0 bringt die Funktionen des **DW2 Mod Studio 0.99** (PC) in die Android-App und die Web-Version. Die mobile Fassung bearbeitet **nur dein PS1-Image (BIN/ISO)**, PC-Port-Mods erzeugt sie nicht.
+
+- **Digimon aus Digimon World 3:** eigenes DW3-/DW2003-Abbild öffnen, Modelle ansehen und DW2-Digimon-Plätze damit ersetzen (Skelett, Geometrie, Textur und Bewegungen; einzeln oder im Stapel). Der DW3-Konverter läuft auf dem Handy (Android NDK) und im Browser (WebAssembly).
+- **Digitations-Editor:** Digitationslinien bearbeiten (Ziele, DP-Grenzen, Stufe) und die DNA-Gruppe jedes Digimon.
+- **DNA-Digitation im Image:** Partner A + B, Ergebnis und Stufe wählen. Die Regel wird in die DNA-Tabelle des Digi-Labors im Spiel geschrieben (STAG2000.PRO, USA-Version) und wirkt damit in jedem PS1-Emulator. Die App zeigt, welche anderen Paare im Spiel dieselbe Tabellenzelle verwenden.
+- **Animationseditor**, Attacken-Editor, Domains und Gegnergruppen, Datei-Explorer, Mod-Projekte mit Rückgängig/Wiederherstellen.
+- Neue Oberfläche mit allen elf Bereichen in einer wischbaren Leiste. Die App heißt jetzt **DW2 Mod Studio**.
+- Nur im Mod Studio am PC: PC-Port-Mods, HD-Texturpacks, Digitationslevel und Kampfkameras des PC-Ports, Öffnen von `dw2.pak`.
 
 ### Neu in v5
 

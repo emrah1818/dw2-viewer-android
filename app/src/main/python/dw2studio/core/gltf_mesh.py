@@ -117,6 +117,25 @@ class GltfMesh:
                 name = node.get('name') or mesh.get('name') or f'node_{index}'
                 if len(mesh.get('primitives', [])) > 1:
                     name += f'_{p}'
+                # Rigid PS1 exports combine bones into material primitives.
+                # Keep each rigid joint separately assignable in DW2's rig UI.
+                attrs = prim['attributes']
+                if 'skin' in node and 'JOINTS_0' in attrs and 'WEIGHTS_0' in attrs:
+                    joints = self.accessor(attrs['JOINTS_0']).astype(int)
+                    weights = self.accessor(attrs['WEIGHTS_0'])
+                    dominant = np.argmax(weights, axis=1)
+                    rigid = np.isclose(weights[np.arange(len(weights)), dominant], 1)
+                    ids = joints[np.arange(len(joints)), dominant]
+                    if rigid.all() and (ids[tri] == ids[tri[:, :1]]).all():
+                        skin = self.doc['skins'][node['skin']]
+                        for joint in np.unique(ids[tri[:, 0]]):
+                            if not 0 <= joint < len(skin['joints']):
+                                raise ValueError('Skin joint outside skeleton')
+                            joint_node = self.doc['nodes'][skin['joints'][joint]]
+                            label = joint_node.get('name', f'joint_{joint}')
+                            selected = tri[ids[tri[:, 0]] == joint]
+                            self.groups.append((f'{label}_{name}', pos, uv, selected, image))
+                        continue
                 self.groups.append((name, pos, uv, tri, image))
         for child in node.get('children', []):
             self._walk(child, world, seen)

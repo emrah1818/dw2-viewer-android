@@ -1,0 +1,867 @@
+/* The battle model's reading and posing: a port of what FIGHTSTG does with
+   its files (dw3_decomp src/fightstg/fightstg.c, src/main/gfx/tim_loader.c;
+   MIT, see CREDITS.md) */
+#include "model.h"
+#include <algorithm>
+#include <cmath>
+#include <functional>
+#include <cstdlib>
+#include <map>
+#include <cstring>
+
+static uint32_t rd32(const uint8_t *p) { uint32_t v; memcpy(&v, p, 4); return v; }
+static int16_t rd16(const uint8_t *p) { int16_t v; memcpy(&v, p, 2); return v; }
+
+int Archive::count() const {
+    return size < 4 ? 0 : (int)(rd32(data) / 4);
+}
+
+const uint8_t *Archive::entry(int i) const {
+    if (i < 0 || (size_t)(i + 1) * 4 > size) return nullptr;
+    uint32_t off = rd32(data + i * 4);
+    return off < size ? data + off : nullptr;
+}
+
+size_t Archive::entry_size(int i) const {
+    const uint8_t *e = entry(i);
+    if (!e) return 0;
+    size_t end = size;
+    for (int j = 0; j < count(); j++) { /* the nearest offset past it: entries need not be in order */
+        uint32_t off = rd32(data + j * 4);
+        if (off > (size_t)(e - data) && off < end) end = off;
+    }
+    return end - (e - data);
+}
+
+/* An archive inside an entry */
+static Archive sub(const Archive &a, int i) {
+    Archive s;
+    s.data = a.entry(i);
+    s.size = s.data ? a.entry_size(i) : 0;
+    return s;
+}
+
+int find_bone_entry(const Archive &a) {
+    int n = a.count();
+    for (int i = 0; i < n; i++) {
+        const uint8_t *e = a.entry(i);
+        size_t size = a.entry_size(i);
+        if (!e || size < 8) continue;
+        uint32_t tex = rd32(e), cnt = rd32(e + 4);
+        if (tex >= (uint32_t)n || cnt == 0 || cnt > 255 || 8 + 12 * cnt > size) continue;
+        bool ok = true;
+        for (uint32_t b = 0; b < cnt && ok; b++) {
+            uint32_t parent = rd32(e + 8 + b * 12), mesh = rd32(e + 12 + b * 12), keys = rd32(e + 16 + b * 12);
+            const uint8_t *me = a.entry(mesh), *ke = a.entry(keys);
+            ok = parent <= b && mesh < (uint32_t)n && keys < (uint32_t)n && me && ke && rd32(me) == 0x18 &&
+                 (rd32(ke) == 0x10 || rd32(ke) == 0x0C);
+        }
+        if (ok) return i;
+    }
+    return -1;
+}
+
+/* The count in [0].x, then the vectors (FIGHTSTG_projectMesh, lightMesh) */
+static bool read_vecs(const Archive &a, int i, std::vector<Vec3s> &out) {
+    const uint8_t *p = a.entry(i);
+    size_t size = a.entry_size(i);
+    if (!p || size < 6) return false;
+    int n = rd16(p);
+    if (n < 0 || (size_t)(n + 1) * 6 > size) return false;
+    out.resize(n);
+    for (int k = 0; k < n; k++) out[k] = {rd16(p + 6 + k * 6), rd16(p + 8 + k * 6), rd16(p + 10 + k * 6)};
+    return true;
+}
+
+/* FIGHTSTG_drawMesh's walk through the command bytes, keeping every polygon */
+static bool read_commands(const uint8_t *cmd, const uint8_t *end, int texX, int texY, Mesh &mesh, std::string &err) {
+    bool quad = false, textured = false, lit = false, gouraud = false;
+    int abr = 0, u = 0, v = 0;
+    uint16_t tpage = 0, clut = 0;
+    uint8_t color[4][3] = {};
+
+    while (cmd < end && *cmd != 0xFF) {
+        int hi = *cmd >> 4, lo = *cmd & 15;
+        if (hi != 0) {
+            switch (hi) {
+            case 8: quad = lo; break;
+            case 9: textured = lo; break;
+            case 12: lit = lo; break;
+            case 13: gouraud = lo; break;
+            case 14: abr = lo; break;
+            }
+            cmd++;
+        } else if (lo == 1) { /* setMeshTexture */
+            if (end - cmd < 7) break;
+            u = cmd[1] + (cmd[2] << 8);
+            v = cmd[3];
+            int cx = cmd[4] + texX, cy = cmd[5] + texY, tp = cmd[6];
+            int px = texX + (cmd[2] << 6), py = texY, a = abr ? abr - 1 : 0;
+            clut = (uint16_t)((cy << 6) | ((cx >> 4) & 0x3F));
+            tpage = (uint16_t)(((tp & 3) << 7) | ((a & 3) << 5) | ((py & 0x100) >> 4) | ((px & 0x3FF) >> 6));
+            cmd += 7;
+        } else if (lo >= 2 && lo <= 5) {
+            if (end - cmd < 4) break;
+            memcpy(color[lo - 2], cmd + 1, 3);
+            cmd += 4;
+        } else if (lo == 0) { /* drawMeshPolygons */
+            do {
+                cmd++;
+                int n = quad ? 4 : 3;
+                int len = n + (lit ? n : 0) + (textured ? n * 2 : 0);
+                if (end - cmd < len + 1) {
+                    err = "commands run past their entry";
+                    return false;
+                }
+                Poly p = {};
+                p.quad = quad, p.textured = textured, p.lit = lit, p.gouraud = gouraud, p.abr = abr;
+                p.tpage = tpage, p.clut = clut;
+                memcpy(p.color, color[0], 3);
+                for (int k = 0; k < n; k++) {
+                    p.idx[k] = cmd[k];
+                    if (lit) p.nrm[k] = cmd[n + k];
+                    if (textured) {
+                        const uint8_t *q = cmd + (lit ? 2 * n : n);
+                        p.uv[k][0] = (uint8_t)(q[k * 2] + u);
+                        p.uv[k][1] = (uint8_t)(q[k * 2 + 1] + v);
+                    }
+                }
+                for (int k = 0; k < n; k++) {
+                    if (p.idx[k] >= (int)mesh.verts.size() || (lit && p.nrm[k] >= (int)mesh.normals.size())) {
+                        err = "a polygon's index is past its mesh";
+                        return false;
+                    }
+                }
+                mesh.polys.push_back(p);
+                cmd += len;
+            } while (cmd < end && *cmd == 0);
+        } else {
+            err = "unknown command byte";
+            return false;
+        }
+    }
+    return true;
+}
+
+/* The TIMs of the texture archive, side by side 0x40 halfwords apart
+   (timLoaderLoadArchive); the image FIGHTSTG gives the model starts at
+   texX, texY */
+void read_tims(const Archive &a, int texX, int texY, std::vector<Tim> &out) {
+    for (int i = 0; i < a.count(); i++) {
+        if (rd32(a.data + i * 4) == 0) break; /* the table ends with an offset of 0 */
+        const uint8_t *src = a.entry(i);
+        if (!src) break;
+        const uint8_t *end = a.data + a.size;
+        std::vector<uint8_t> buf;
+        bool rlen = end - src >= 8 && memcmp(src, "RLEN", 4) == 0;
+        if (rlen) {
+            const uint8_t *s = src + 8;
+            while (s < end && *s) {
+                int c = *s;
+                if (c & 0x80) {
+                    if (s + 1 >= end) break;
+                    buf.insert(buf.end(), c & 0x7F, s[1]);
+                    s += 2;
+                } else {
+                    if (s + 1 + c > end) break;
+                    buf.insert(buf.end(), s + 1, s + 1 + c);
+                    s += 1 + c;
+                }
+            }
+        } else {
+            buf.assign(src, end);
+        }
+        /* the TIM: id, flag, then the CLUT's block (when it has one) and the image's */
+        if (buf.size() < 20 || rd32(buf.data()) != 0x10) continue;
+        size_t at = 8;
+        if (rd32(buf.data() + 4) & 8) at += rd32(buf.data() + 8);
+        if (at + 12 > buf.size()) continue;
+        Tim t;
+        t.x = texX + i * 0x40, t.y = texY, t.rlen = rlen;
+        t.entry = i, t.pxOff = at + 12;
+        t.w = (uint16_t)rd16(buf.data() + at + 8);
+        t.h = (uint16_t)rd16(buf.data() + at + 10);
+        size_t px = (size_t)t.w * t.h;
+        if (at + 12 + px * 2 > buf.size()) continue;
+        t.pixels.resize(px);
+        memcpy(t.pixels.data(), buf.data() + at + 12, px * 2);
+        t.buf = std::move(buf);
+        out.push_back(std::move(t));
+    }
+}
+
+/* VRAM, 1024x512 halfwords, with the model's TIMs where FIGHTSTG puts them */
+static void place_tims(const std::vector<Tim> &tims, std::vector<uint16_t> &vram) {
+    vram.assign(1024 * 512, 0);
+    for (const Tim &t : tims)
+        for (int y = 0; y < t.h; y++)
+            for (int x = 0; x < t.w; x++)
+                vram[((t.y + y) & 511) * 1024 + ((t.x + x) & 1023)] = t.pixels[y * t.w + x];
+}
+
+/* A motions' archive: each entry MotionSteps up to an index of 0x7FFF */
+static bool read_motions(const Archive &a, std::vector<std::vector<MotionStep>> &out) {
+    int n = a.count();
+    if (n <= 0 || n > 512 || a.size < (size_t)n * 4) return false;
+    std::vector<std::vector<MotionStep>> list(n);
+    for (int i = 0; i < n; i++) {
+        const uint8_t *p = a.entry(i);
+        if (!p) return false;
+        const uint8_t *end = a.data + a.size;
+        for (; p + 8 <= end; p += 8) {
+            MotionStep s = {rd16(p), rd16(p + 2), rd16(p + 4), rd16(p + 6)};
+            list[i].push_back(s);
+            if (s.index == 0x7FFF) break;
+        }
+        if (list[i].empty() || list[i].back().index != 0x7FFF) return false;
+    }
+    out = std::move(list);
+    return true;
+}
+
+bool Model::load(const std::string &n, std::vector<uint8_t> bytes, const Fighter *f, int entry, int motionsAt) {
+    if (bytes.size() > 8 && (!memcmp(bytes.data(), "DW2M", 4) || !memcmp(bytes.data(), "DCBM", 4))) return load_dw2(n, std::move(bytes));
+    name = n;
+    fighter = f;
+    file = std::move(bytes);
+    arc.data = file.data();
+    arc.size = file.size();
+    if (arc.count() <= 0 || (size_t)arc.count() * 4 > arc.size) {
+        error = "not an archive";
+        return false;
+    }
+    boneEntry = f ? f->modelEntry : entry >= 0 ? entry : find_bone_entry(arc);
+    if (boneEntry >= arc.count() || !arc.entry(boneEntry)) boneEntry = -1;
+    if (boneEntry < 0) {
+        error = "no bone list (not a model?)";
+        return false;
+    }
+    /* FIGHTSTG_createModel: {texture entry, bones - 1, (parent, mesh, keys)...} */
+    const uint8_t *e = arc.entry(boneEntry);
+    texEntry = (int)rd32(e);
+    int count = (int)rd32(e + 4);
+    bones.assign(1, Bone{0, -1, -1, {}});
+    for (int b = 0; b < count; b++) {
+        Bone bone;
+        bone.parent = (int)rd32(e + 8 + b * 12);
+        int meshEntry = (int)rd32(e + 12 + b * 12);
+        bone.keyEntry = (int)rd32(e + 16 + b * 12);
+        bone.mesh = (int)meshes.size();
+        Mesh mesh;
+        mesh.entry = meshEntry;
+        Archive ma = sub(arc, meshEntry);
+        if (!read_vecs(ma, 0, mesh.verts) || !read_vecs(ma, 1, mesh.normals) || !ma.entry(2)) {
+            error = "bone " + std::to_string(b + 1) + ": bad mesh";
+            return false;
+        }
+        if (!read_commands(ma.entry(2), ma.data + ma.size, TEX_X, TEX_Y, mesh, error)) {
+            error = "bone " + std::to_string(b + 1) + ": " + error;
+            return false;
+        }
+        meshes.push_back(std::move(mesh));
+        Archive ka = sub(arc, bone.keyEntry);
+        for (int t = 0; t < 3; t++) {
+            const uint8_t *p = ka.entry(t);
+            const uint8_t *end = ka.data + ka.size;
+            for (; p && p + 8 <= end; p += 8) {
+                Key k = {rd16(p), rd16(p + 2), rd16(p + 4), rd16(p + 6)};
+                bone.keys[t].push_back(k);
+                if (k.frame >= 30000) break; /* the end */
+            }
+            if (bone.keys[t].empty()) bone.keys[t].push_back({0, 0, 0, 30000});
+        }
+        bones.push_back(std::move(bone));
+    }
+    if (texEntry != 0) read_tims(sub(arc, texEntry), TEX_X, TEX_Y, tims);
+    place_tims(tims, vram);
+    /* the motions: FighterInfo.motions names their archive (the fighters' is
+       entry 0 of their model's file); without it, the first entry that reads
+       as one */
+    if (f && f->motionsFid == f->modelFid && read_motions(sub(arc, f->motionsEntry), motions)) motionEntry = f->motionsEntry;
+    if (motionsAt >= 0 && motionsAt != boneEntry && motionsAt != texEntry && motionsAt < arc.count() && arc.entry(motionsAt) &&
+        read_motions(sub(arc, motionsAt), motions))
+        motionEntry = motionsAt;
+    if (f && f->effectsFid == f->modelFid) {
+        Archive e = sub(arc, f->effectsEntry);
+        scripts = read_scripts(e.data, e.size);
+    }
+    for (int i = 0; i < arc.count() && motionEntry < 0; i++) {
+        if (i == boneEntry || i == texEntry || rd32(arc.data + i * 4) == 0) continue;
+        if (read_motions(sub(arc, i), motions)) motionEntry = i;
+    }
+    pose.assign(bones.size(), Pose{});
+    for (Pose &p : pose) {
+        p.scale = {4096, 4096, 4096};
+        p.visible = true;
+        for (int k = 0; k < 16; k++) p.world[k] = k % 5 == 0;
+    }
+    keyframes.assign(0x640, 0);
+    blendTargets.assign(0x640, 0);
+    blendSources.assign(0x640, 0);
+    if (motions.size() >= 2) {
+        idleFrames[0] = motions[0][0].frame;
+        idleFrames[1] = motions[1][0].frame;
+    }
+    if (!motions.empty()) {
+        setMotion(1);
+    } else {
+        for (size_t b = 1; b < bones.size(); b++) {
+            Pose &p = pose[b];
+            p.pos = {bones[b].keys[0][0].x, bones[b].keys[0][0].y, bones[b].keys[0][0].z};
+            p.rot = {bones[b].keys[1][0].x, bones[b].keys[1][0].y, bones[b].keys[1][0].z};
+            p.scale = {bones[b].keys[2][0].x, bones[b].keys[2][0].y, bones[b].keys[2][0].z};
+        }
+        computeWorld();
+    }
+    return true;
+}
+
+bool Model::stepFace() {
+    return fighter && step_face(*fighter, face, motion, TEX_X, TEX_Y, vram);
+}
+
+/* --- FIGHTSTG's posing --- */
+
+static int16_t &comp(Vec3s &v, int i) { return i == 0 ? v.x : i == 1 ? v.y : v.z; }
+
+/* out = prev + (cur - prev) * t / 4096, as the GTE's gpf12 with the halfword difference */
+static Vec3s lerp(const Vec3s &prev, const Vec3s &cur, int t) {
+    Vec3s out = prev;
+    for (int i = 0; i < 3; i++) {
+        int16_t d = (int16_t)(comp(const_cast<Vec3s &>(cur), i) - comp(out, i));
+        comp(out, i) += (int16_t)((d * t) >> 12);
+    }
+    return out;
+}
+
+/* FIGHTSTG_poseBone */
+static void pose_bone(const Bone &bone, Pose &p, int frame) {
+    Vec3s *outs[3] = {&p.pos, &p.rot, &p.scale};
+    for (int t = 0; t < 3; t++) {
+        const std::vector<Key> &keys = bone.keys[t];
+        size_t k = 0;
+        bool found = false;
+        for (;; k++) {
+            if (k + 1 >= keys.size()) break; /* the viewer's guard: the game trusts the end key */
+            if (keys[k].frame == frame) { found = true; break; }
+            if (keys[k].frame >= frame) break;
+        }
+        const Key &cur = keys[k];
+        if (found || k == 0 || keys[k].frame < frame) {
+            *outs[t] = {cur.x, cur.y, cur.z};
+            continue;
+        }
+        const Key &prev = keys[k - 1];
+        int span = cur.frame - prev.frame;
+        int dp = span ? ((frame - prev.frame) << 12) / span : 0;
+        *outs[t] = lerp({prev.x, prev.y, prev.z}, {cur.x, cur.y, cur.z}, dp);
+    }
+    p.hide = false;
+    auto it = std::upper_bound(bone.hide.begin(), bone.hide.end(), frame, [](int f, const Key &k) { return f < k.frame; });
+    if (it != bone.hide.begin()) p.hide = std::prev(it)->x != 0;
+}
+
+/* FIGHTSTG_blendBone */
+static void blend_bone(const Bone &bone, Pose &p, int frame, int blend) {
+    Vec3s *outs[3] = {&p.pos, &p.rot, &p.scale};
+    Vec3s prevs[3] = {p.prevPos, p.prevRot, p.prevScale};
+    for (int t = 0; t < 3; t++) {
+        const std::vector<Key> &keys = bone.keys[t];
+        size_t k = 0;
+        while (k + 1 < keys.size() && keys[k].frame < frame) k++;
+        Vec3s cur = {keys[k].x, keys[k].y, keys[k].z}, prev = prevs[t];
+        if (t == 2 && (!prev.x || !prev.y || !prev.z || !cur.x || !cur.y || !cur.z)) {
+            *outs[t] = cur;
+            return;
+        }
+        *outs[t] = lerp(prev, cur, blend);
+    }
+}
+
+void Model::setMotion(int m) {
+    motion = m;
+    keyframe = 1;
+    keyframeCount = 0;
+    motionDone = false;
+    blending = false;
+    blendTarget = 0;
+    if (m < 1 || m > (int)motions.size()) return;
+    const std::vector<MotionStep> &steps = motions[m - 1];
+    int count = 0;
+    for (size_t s = 0; s < steps.size() && steps[s].index != 0x7FFF && count < 0x640; s++) {
+        const MotionStep &step = steps[s];
+        int n = step.count;
+        if (n == 0) {
+            keyframes[count] = (uint16_t)step.frame;
+            blendTargets[count] = (uint16_t)step.endFrame;
+            count++;
+            break;
+        }
+        if (step.endFrame == 0) {
+            int to = s + 1 < steps.size() ? steps[s + 1].frame : -1;
+            if (to == -1) to = idleFrames[0]; /* the idle motion the viewer's model has: the first */
+            int from = step.index != 0 && s > 0 ? (uint16_t)steps[s - 1].endFrame : 0xFFFF;
+            for (int i = 0; i < n && count < 0x640; i++) {
+                blendSources[count] = (uint16_t)from;
+                blendTargets[count] = (uint16_t)to;
+                keyframes[count] = (uint16_t)((((i + 1) << 12) / (n + 1)) | 0x8000);
+                count++;
+            }
+        } else {
+            for (int i = 0; i < n && count < 0x640; i++) {
+                keyframes[count] = (uint16_t)(step.frame + i);
+                blendTargets[count] = 0;
+                count++;
+            }
+        }
+    }
+    keyframeCount = count;
+    evaluate();
+}
+
+/* The first half of FIGHTSTG_stepMotion (the keyframe's frame or blend), then
+   FIGHTSTG_poseBones */
+void Model::evaluate() {
+    if (keyframeCount <= 0) return;
+    if (keyframe >= keyframeCount) keyframe = keyframeCount - 1;
+    int key = keyframe;
+    if (!motionDone) {
+        if (keyframes[key] & 0x8000) {
+            if (blendTarget != blendTargets[key]) {
+                blendTarget = blendTargets[key];
+                if (blendSources[key] != 0xFFFF)
+                    for (size_t b = 1; b < bones.size(); b++) pose_bone(bones[b], pose[b], blendSources[key]);
+                for (Pose &p : pose) p.prevPos = p.pos, p.prevRot = p.rot, p.prevScale = p.scale;
+            }
+            frame = blendTargets[key];
+            blend = keyframes[key] & 0x7FFF;
+            blending = true;
+        } else {
+            blendTarget = 0;
+            frame = keyframes[key];
+            blending = false;
+        }
+    } else {
+        blendTarget = 0;
+        blending = false;
+    }
+    for (size_t b = 1; b < bones.size(); b++) {
+        if (blending)
+            blend_bone(bones[b], pose[b], frame, blend);
+        else
+            pose_bone(bones[b], pose[b], frame);
+    }
+    static const bool envTpose = getenv("DW3MV_TPOSE") != nullptr; /* a diagnostic for --shot: the T-pose */
+    if (tpose || envTpose) apply_tpose();
+    if (const char *hid = getenv("DW3MV_HIDE")) /* a diagnostic: the bones in the list ("17,22") draw no mesh */
+        for (const char *c = hid; *c; ) {
+            int b = atoi(c);
+            if (b > 0 && b < (int)pose.size()) pose[b].hide = true;
+            while (*c && *c != ',') c++;
+            if (*c == ',') c++;
+        }
+    computeWorld();
+}
+
+/* The T-pose: arms out along x, legs straight down, found from the skeleton as it stands with every rotation zero (nothing is
+   read from the model's names). A limb is a chain of bones, each following its deepest child, that starts off the model's
+   middle line; it is a leg when it ends near the floor, an arm when it does not (a chain at the middle, like a tail, a
+   neck or a wing's root, is left as it is). Each bone of a limb is turned the shortest way so that its child lies along the
+   target; what hangs off a limb's side (a shoulder blade, a foot) keeps the world's axes. The keys' positions and scales stay,
+   so the pose is the current frame's with the rotations replaced */
+namespace {
+struct V3 { float x, y, z; };
+void rot_euler(const float R[3][3], Vec3s &out) {
+    const float k = 4096 / 6.2831853f;
+    out.y = (int16_t)lroundf(asinf(std::max(-1.0f, std::min(1.0f, -R[2][0]))) * k);
+    out.x = (int16_t)lroundf(atan2f(R[2][1], R[2][2]) * k);
+    out.z = (int16_t)lroundf(atan2f(R[1][0], R[0][0]) * k);
+}
+V3 unit(V3 v) { float n = sqrtf(v.x * v.x + v.y * v.y + v.z * v.z); return n > 1e-6f ? V3{v.x / n, v.y / n, v.z / n} : V3{0, 1, 0}; }
+/* the shortest rotation taking unit a to unit b */
+void arc_matrix(V3 a, V3 b, float R[3][3]) {
+    V3 v = {a.y * b.z - a.z * b.y, a.z * b.x - a.x * b.z, a.x * b.y - a.y * b.x};
+    float c = a.x * b.x + a.y * b.y + a.z * b.z;
+    float K[3][3] = {{0, -v.z, v.y}, {v.z, 0, -v.x}, {-v.y, v.x, 0}};
+    if (c < -0.9999f) { /* opposite: half a turn about any axis across them */
+        V3 ax = unit(fabsf(a.x) < 0.9f ? V3{0, -a.z, a.y} : V3{a.z, 0, -a.x});
+        float A[3] = {ax.x, ax.y, ax.z};
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++) R[i][j] = 2 * A[i] * A[j] - (i == j);
+        return;
+    }
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) {
+            float k2 = K[i][0] * K[0][j] + K[i][1] * K[1][j] + K[i][2] * K[2][j];
+            R[i][j] = (i == j) + K[i][j] + k2 / (1 + c);
+        }
+}
+bool inv3(const float m[3][3], float o[3][3]) {
+    float det = m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    if (fabsf(det) < 1e-9f) return false;
+    o[0][0] = (m[1][1] * m[2][2] - m[1][2] * m[2][1]) / det; o[0][1] = (m[0][2] * m[2][1] - m[0][1] * m[2][2]) / det; o[0][2] = (m[0][1] * m[1][2] - m[0][2] * m[1][1]) / det;
+    o[1][0] = (m[1][2] * m[2][0] - m[1][0] * m[2][2]) / det; o[1][1] = (m[0][0] * m[2][2] - m[0][2] * m[2][0]) / det; o[1][2] = (m[0][2] * m[1][0] - m[0][0] * m[1][2]) / det;
+    o[2][0] = (m[1][0] * m[2][1] - m[1][1] * m[2][0]) / det; o[2][1] = (m[0][1] * m[2][0] - m[0][0] * m[2][1]) / det; o[2][2] = (m[0][0] * m[1][1] - m[0][1] * m[1][0]) / det;
+    return true;
+}
+} // namespace
+
+void Model::apply_tpose() {
+    const int n = (int)bones.size();
+    if (n < 3) return;
+    for (int b = 1; b < n; b++) pose[b].rot = Vec3s{0, 0, 0};
+    computeWorld();
+    auto joint = [&](int b) { return V3{pose[b].world[12], pose[b].world[13], pose[b].world[14]}; };
+    std::vector<std::vector<int>> kids(n);
+    for (int b = 1; b < n; b++)
+        if (bones[b].parent >= 1 && bones[b].parent < n && bones[b].parent != b) kids[bones[b].parent].push_back(b);
+    std::vector<int> height(n, 0), depth(n, 0);
+    std::function<int(int, int)> measure = [&](int b, int d) {
+        if (d > n) return 0;
+        depth[b] = d;
+        int h = 0;
+        for (int c : kids[b]) h = std::max(h, 1 + measure(c, d + 1));
+        return height[b] = h;
+    };
+    for (int b = 1; b < n; b++) if (bones[b].parent < 1 || bones[b].parent >= n) measure(b, 0);
+    float minX = 1e9f, maxX = -1e9f, minY = 1e9f, maxY = -1e9f;
+    for (int b = 1; b < n; b++) {
+        V3 j = joint(b);
+        minX = std::min(minX, j.x), maxX = std::max(maxX, j.x), minY = std::min(minY, j.y), maxY = std::max(maxY, j.y);
+    }
+    float midX = (minX + maxX) / 2, range = maxY - minY;
+    std::vector<int> role(n, 0), next(n, 0); /* 0 free, 1 leg, 2 arm, 3 the end of an arm, 4 hangs off a limb */
+    std::vector<V3> target(n, V3{0, 0, 0});
+    std::vector<int> order(n - 1);
+    for (int b = 1; b < n; b++) order[b - 1] = b;
+    std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return depth[a] < depth[b]; });
+    std::vector<char> done(n, 0), floor(n, 0); /* FLOOR: some bone of its subtree is down at the floor */
+    for (auto it = order.rbegin(); it != order.rend(); ++it) {
+        int b = *it;
+        floor[b] |= joint(b).y >= maxY - 0.15f * range;
+        if (bones[b].parent >= 1) floor[bones[b].parent] |= floor[b];
+    }
+    for (int s : order) {
+        if (done[s] || (bones[s].parent >= 1 && role[bones[s].parent])) continue;
+        int low = 0;
+        for (int k : kids[s]) low += floor[k];
+        if (low >= 2) continue; /* a pelvis: two legs leave it, it is no leg's start */
+        std::vector<int> chain = {s};
+        for (int c = s; !kids[c].empty() && (int)chain.size() <= n;) {
+            int best = kids[c][0];
+            for (int k : kids[c]) if (height[k] > height[best]) best = k;
+            chain.push_back(best), c = best;
+        }
+        if (chain.size() < 2) continue;
+        V3 a = joint(chain.front()), z = joint(chain.back());
+        int kind = 0;
+        if (z.y >= maxY - 0.15f * range && a.y < maxY - 0.15f * range) kind = 1;
+        else if (fabsf(a.x - midX) > 0.05f * range && z.y < maxY - 0.15f * range) kind = 2;
+        if (!kind) continue;
+        float sx = a.x >= midX ? 1.0f : -1.0f;
+        for (size_t i = 0; i < chain.size(); i++) {
+            int b = chain[i];
+            done[b] = 1;
+            bool last = i + 1 == chain.size();
+            role[b] = !last ? kind : kind == 1 ? 4 : 3; /* a foot lies flat; a hand follows its arm */
+            next[b] = last ? 0 : chain[i + 1];
+            target[b] = kind == 1 ? V3{0, 1, 0} : V3{sx, 0, 0};
+        }
+        for (int b : chain) for (int c : kids[b]) if (!role[c]) role[c] = 4;
+    }
+    for (int b : order) {
+        if (role[b] != 1 && role[b] != 2 && role[b] != 4) continue;
+        computeWorld();
+        float pl[3][3] = {{1, 0, 0}, {0, 1, 0}, {0, 0, 1}};
+        if (bones[b].parent >= 1) {
+            const float *w = pose[bones[b].parent].world;
+            for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) pl[i][j] = w[j * 4 + i];
+        }
+        float R[3][3];
+        if (role[b] == 4) { /* the world's axes: the parent's rotation undone */
+            float c[3][3];
+            for (int j = 0; j < 3; j++) {
+                V3 col = unit(V3{pl[0][j], pl[1][j], pl[2][j]});
+                c[0][j] = col.x, c[1][j] = col.y, c[2][j] = col.z;
+            }
+            for (int i = 0; i < 3; i++) for (int j = 0; j < 3; j++) R[i][j] = c[j][i];
+        } else {
+            int c = next[b];
+            V3 v = {pose[c].pos.x * pose[b].scale.x / 4096.0f, pose[c].pos.y * pose[b].scale.y / 4096.0f, pose[c].pos.z * pose[b].scale.z / 4096.0f};
+            float pi[3][3];
+            if (!inv3(pl, pi)) continue;
+            V3 u = target[b], w = {pi[0][0] * u.x + pi[0][1] * u.y + pi[0][2] * u.z, pi[1][0] * u.x + pi[1][1] * u.y + pi[1][2] * u.z, pi[2][0] * u.x + pi[2][1] * u.y + pi[2][2] * u.z};
+            arc_matrix(unit(v), unit(w), R);
+        }
+        rot_euler(R, pose[b].rot);
+    }
+}
+
+/* The second half of FIGHTSTG_stepMotion: on by the frames gone by */
+void Model::advance(int ticks, bool once) {
+    if (motionDone || keyframeCount <= 0) return;
+    keyframe += ticks;
+    if (keyframe >= keyframeCount) keyframe = keyframeCount - 1;
+    switch (keyframes[keyframe]) {
+    case 0x8000:
+        if (once && blendTargets[keyframe] < keyframe) {
+            keyframe--;
+            motionDone = true;
+            break;
+        }
+        keyframe = blendTargets[keyframe];
+        if (keyframe >= keyframeCount) keyframe = keyframeCount - 1;
+        break;
+    case 0xFFFF:
+        motionDone = true;
+        break;
+    }
+}
+
+/* Each bone's matrix: Rz * Ry * Rx (RotMatrixZYX), its columns scaled, at its
+   position, under its parent's; a bone scaled to 48 or less is hidden and
+   keeps its last matrix (FIGHTSTG_updateModel) */
+static void rzyx_deg(const std::array<float, 3> &d, float r[3][3]) {
+    const float k = 3.14159265f / 180;
+    float cx = cosf(d[0] * k), sx = sinf(d[0] * k), cy = cosf(d[1] * k), sy = sinf(d[1] * k), cz = cosf(d[2] * k), sz = sinf(d[2] * k);
+    float m[3][3] = {{cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx}, {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx}, {-sy, cy * sx, cy * cx}};
+    memcpy(r, m, sizeof m);
+}
+
+void Model::computeWorld() {
+    auto it = adj.find(motion);
+    bool live = it != adj.end() && !it->second.empty();
+    if (live) {
+        std::map<int, std::map<int, std::array<float, 3>>> keep;
+        keep.swap(adj);
+        computeWorld(); /* the bones as the file has them */
+        keep.swap(adj);
+        rawWorld.resize(bones.size());
+        for (size_t b = 0; b < bones.size(); b++) memcpy(rawWorld[b].data(), pose[b].world, sizeof pose[b].world);
+    } else
+        rawWorld.clear();
+    for (size_t b = 0; b < bones.size(); b++) {
+        Pose &p = pose[b];
+        if (b == 0) {
+            p.pos = {0, 0, 0}, p.rot = {0, 0, 0}, p.scale = {4096, 4096, 4096};
+        }
+        if (((int)p.scale.x | (int)p.scale.y | (int)p.scale.z) <= 48) {
+            p.visible = false;
+            continue;
+        }
+        p.visible = !p.hide;
+        float local[16];
+        bone_matrix(p.pos, p.rot, p.scale, local);
+        if (b == 0) {
+            memcpy(p.world, local, sizeof local);
+            continue;
+        }
+        const float *a = pose[bones[b].parent].world;
+        float w[16];
+        for (int c = 0; c < 4; c++)
+            for (int i = 0; i < 4; i++)
+                w[c * 4 + i] = a[i] * local[c * 4] + a[4 + i] * local[c * 4 + 1] + a[8 + i] * local[c * 4 + 2] + a[12 + i] * local[c * 4 + 3];
+        memcpy(p.world, w, sizeof w);
+        if (live) { /* its own turn about its joint: the bones under it hang from this world */
+            auto a = it->second.find((int)b);
+            if (a != it->second.end()) {
+                float r[3][3], o[3][3];
+                rzyx_deg(a->second, r);
+                for (int c = 0; c < 3; c++)
+                    for (int i = 0; i < 3; i++) o[c][i] = r[i][0] * p.world[c * 4] + r[i][1] * p.world[c * 4 + 1] + r[i][2] * p.world[c * 4 + 2];
+                for (int c = 0; c < 3; c++)
+                    for (int i = 0; i < 3; i++) p.world[c * 4 + i] = o[c][i];
+            }
+        }
+    }
+    if (live && it->second.count(0) && bones.size() > 1) { /* adj[motion][0]: the whole body turned about the pelvis's joint (the first bone's), last */
+        float r[3][3], pv[3] = {pose[1].world[12], pose[1].world[13], pose[1].world[14]};
+        rzyx_deg(it->second.at(0), r);
+        for (size_t b = 1; b < bones.size(); b++) {
+            float *w = pose[b].world, o[3][3], d[3] = {w[12] - pv[0], w[13] - pv[1], w[14] - pv[2]};
+            for (int c = 0; c < 3; c++)
+                for (int i = 0; i < 3; i++) o[c][i] = r[i][0] * w[c * 4] + r[i][1] * w[c * 4 + 1] + r[i][2] * w[c * 4 + 2];
+            for (int c = 0; c < 3; c++)
+                for (int i = 0; i < 3; i++) w[c * 4 + i] = o[c][i];
+            for (int i = 0; i < 3; i++) w[12 + i] = pv[i] + r[i][0] * d[0] + r[i][1] * d[1] + r[i][2] * d[2];
+        }
+    }
+}
+
+void bone_matrix(const Vec3s &pos, const Vec3s &rot, const Vec3s &scale, float out[16]) {
+    const float k = 6.2831853f / 4096;
+    float cx = cosf(rot.x * k), sx = sinf(rot.x * k);
+    float cy = cosf(rot.y * k), sy = sinf(rot.y * k);
+    float cz = cosf(rot.z * k), sz = sinf(rot.z * k);
+    float r[3][3] = { /* Rz * Ry * Rx */
+        {cz * cy, cz * sy * sx - sz * cx, cz * sy * cx + sz * sx},
+        {sz * cy, sz * sy * sx + cz * cx, sz * sy * cx - cz * sx},
+        {-sy, cy * sx, cy * cx},
+    };
+    float s[3] = {scale.x / 4096.0f, scale.y / 4096.0f, scale.z / 4096.0f};
+    memset(out, 0, 16 * sizeof(float));
+    for (int i = 0; i < 3; i++)
+        for (int j = 0; j < 3; j++) out[j * 4 + i] = r[i][j] * s[j];
+    out[12] = pos.x, out[13] = pos.y, out[14] = pos.z, out[15] = 1;
+}
+
+/* --- the textures, decoded on the CPU --- */
+
+static uint32_t rgba(uint16_t p, bool stp) {
+    uint32_t r = (p & 31) * 255 / 31, g = (p >> 5 & 31) * 255 / 31, b = (p >> 10 & 31) * 255 / 31;
+    return r | g << 8 | b << 16 | (!p ? 0 : stp && (p & 0x8000) ? 0x80000000u : 0xFF000000u);
+}
+
+std::vector<uint32_t> decode_page(const std::vector<uint16_t> &vram, uint16_t tpage, uint16_t clut, int w, int h, bool stp) {
+    std::vector<uint32_t> out(w * h);
+    int px = tpage_x(tpage), py = tpage_y(tpage), cx = clut_x(clut), cy = clut_y(clut), depth = tpage_depth(tpage);
+    auto at = [&](int x, int y) { return vram[(y & 511) * 1024 + (x & 1023)]; };
+    for (int v = 0; v < h; v++)
+        for (int u = 0; u < w; u++) {
+            uint16_t p;
+            if (depth == 0)
+                p = at(cx + (at(px + u / 4, py + v) >> (u & 3) * 4 & 15), cy);
+            else if (depth == 1)
+                p = at(cx + (at(px + u / 2, py + v) >> (u & 1) * 8 & 255), cy);
+            else
+                p = at(px + u, py + v);
+            out[v * w + u] = rgba(p, stp);
+        }
+    return out;
+}
+
+void patch_vecs(std::vector<uint8_t> &file, int meshEntry, int which, const std::vector<Vec3s> &vecs) {
+    Archive a;
+    a.data = file.data(), a.size = file.size();
+    Archive ma;
+    ma.data = a.entry(meshEntry);
+    if (!ma.data) return;
+    ma.size = a.entry_size(meshEntry);
+    uint8_t *p = const_cast<uint8_t *>(ma.entry(which));
+    if (!p || (size_t)rd16(p) != vecs.size()) return;
+    for (size_t k = 0; k < vecs.size(); k++) memcpy(p + 6 + k * 6, &vecs[k], 6);
+}
+
+void patch_keys(std::vector<uint8_t> &file, int keyEntry, const std::vector<Key> &keys) {
+    Archive a;
+    a.data = file.data(), a.size = file.size();
+    Archive ka;
+    ka.data = a.entry(keyEntry);
+    if (!ka.data) return;
+    ka.size = a.entry_size(keyEntry);
+    uint8_t *p = const_cast<uint8_t *>(ka.entry(0));
+    for (size_t k = 0; p && k < keys.size() && p + k * 8 + 8 <= ka.data + ka.size; k++) memcpy(p + k * 8, &keys[k], 6); /* x y z; the frame stays */
+}
+
+/* A TIM as its entry holds it: RLEN packed again when it was packed */
+static std::vector<uint8_t> encode_tim(const Tim &t, const uint8_t *orig) {
+    std::vector<uint8_t> buf = t.buf;
+    memcpy(buf.data() + t.pxOff, t.pixels.data(), t.pixels.size() * 2);
+    if (!t.rlen) return buf;
+    std::vector<uint8_t> out(orig, orig + 8); /* "RLEN" and its size */
+    for (size_t i = 0; i < buf.size();) {
+        size_t r = 1;
+        while (i + r < buf.size() && buf[i + r] == buf[i] && r < 127) r++;
+        if (r >= 3) {
+            out.push_back((uint8_t)(0x80 | r)), out.push_back(buf[i]);
+            i += r;
+            continue;
+        }
+        size_t s = i, n = 0;
+        while (i < buf.size() && n < 127) { /* a literal up to the next run of 3 */
+            if (i + 2 < buf.size() && buf[i] == buf[i + 1] && buf[i] == buf[i + 2]) break;
+            i++, n++;
+        }
+        out.push_back((uint8_t)n);
+        out.insert(out.end(), buf.begin() + s, buf.begin() + s + n);
+    }
+    out.push_back(0);
+    return out;
+}
+
+bool patch_tims(std::vector<uint8_t> &file, int texEntry, const std::vector<Tim> &tims, std::string &err) {
+    Archive a;
+    a.data = file.data(), a.size = file.size();
+    Archive ta;
+    ta.data = a.entry(texEntry);
+    if (!ta.data) return err = "no textures", false;
+    ta.size = a.entry_size(texEntry);
+    int n = ta.count();
+    if (n <= 0) return err = "no textures", false;
+    std::vector<std::vector<uint8_t>> entries(n);
+    for (int i = 0; i < n; i++) {
+        if (!rd32(ta.data + i * 4)) continue;
+        const uint8_t *e = ta.entry(i);
+        if (e) entries[i].assign(e, e + ta.entry_size(i));
+    }
+    for (const Tim &t : tims) {
+        if (t.entry < 0 || t.entry >= n || entries[t.entry].size() < 8) return err = "a texture entry isn't there", false;
+        entries[t.entry] = encode_tim(t, entries[t.entry].data());
+    }
+    std::vector<uint8_t> sub(n * 4, 0);
+    for (int i = 0; i < n; i++) {
+        if (!rd32(ta.data + i * 4)) continue;
+        uint32_t at = (uint32_t)sub.size();
+        memcpy(&sub[i * 4], &at, 4);
+        sub.insert(sub.end(), entries[i].begin(), entries[i].end());
+        while (sub.size() & 3) sub.push_back(0);
+    }
+    file = replace_entries(file, {{texEntry, sub}});
+    return true;
+}
+
+std::vector<uint8_t> replace_entries(const std::vector<uint8_t> &file, const std::map<int, std::vector<uint8_t>> &repl) {
+    Archive base;
+    base.data = file.data(), base.size = file.size();
+    int count = base.count();
+    std::vector<std::vector<uint8_t>> entries(count);
+    for (int i = 0; i < count; i++) {
+        const uint8_t *e = base.entry(i);
+        if (e && rd32(file.data() + i * 4)) entries[i].assign(e, e + base.entry_size(i));
+    }
+    for (const auto &kv : repl) { /* past the last entry: new ones */
+        if (kv.first >= (int)entries.size()) entries.resize(kv.first + 1);
+        if (kv.first >= 0) entries[kv.first] = kv.second;
+    }
+    int total = (int)entries.size();
+    std::vector<uint8_t> out(total * 4, 0);
+    for (int i = 0; i < total; i++) {
+        if (i < count && !rd32(file.data() + i * 4)) continue; /* the disc's 0: kept */
+        uint32_t at = (uint32_t)out.size();
+        memcpy(&out[i * 4], &at, 4);
+        out.insert(out.end(), entries[i].begin(), entries[i].end());
+        while (out.size() & 3) out.push_back(0);
+    }
+    while (out.size() % 2048) out.push_back(0);
+    return out;
+}
+
+bool texture_edits(const std::vector<uint16_t> &vram, uint16_t tpage, uint16_t clut, const std::vector<uint32_t> &was,
+                   const std::vector<uint32_t> &now, std::map<int, uint16_t> &changes, std::string &err) {
+    int px = tpage_x(tpage), py = tpage_y(tpage), cx = clut_x(clut), cy = clut_y(clut), depth = tpage_depth(tpage);
+    if (depth > 1) return err = "a 16-bit page can't be edited (only 4 and 8-bit ones)", false;
+    if (was.size() != 256 * 256 || now.size() != was.size()) return err = "a page's PNG must keep its 256x256 size", false;
+    int n = depth == 0 ? 16 : 256;
+    std::vector<uint16_t> pal(n);
+    for (int i = 0; i < n; i++) pal[i] = vram[(cy & 511) * 1024 + ((cx + i) & 1023)];
+    for (int v = 0; v < 256; v++)
+        for (int u = 0; u < 256; u++) {
+            uint32_t c = now[v * 256 + u];
+            if (c == was[v * 256 + u]) continue;
+            int best = -1;
+            long long bd = 1LL << 60;
+            for (int i = 0; i < n; i++) {
+                if ((c >> 24) < 64 ? pal[i] != 0 : pal[i] == 0) continue; /* a clear texel takes a clear color */
+                uint32_t q = rgba(pal[i], false);
+                long long d = 0;
+                for (int k = 0; k < 3; k++) d += (long long)((int)(q >> k * 8 & 255) - (int)(c >> k * 8 & 255)) * ((int)(q >> k * 8 & 255) - (int)(c >> k * 8 & 255));
+                if (d < bd) bd = d, best = i;
+            }
+            if (best < 0) continue;
+            int at = ((py + v) & 511) * 1024 + ((px + (depth == 0 ? u / 4 : u / 2)) & 1023), shift = depth == 0 ? (u & 3) * 4 : (u & 1) * 8;
+            int mask = depth == 0 ? 15 : 255;
+            uint16_t old = changes.count(at) ? changes[at] : vram[at];
+            changes[at] = (uint16_t)((old & ~(mask << shift)) | (best << shift));
+        }
+    return true;
+}

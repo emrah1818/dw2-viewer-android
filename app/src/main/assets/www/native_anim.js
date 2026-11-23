@@ -201,9 +201,10 @@ export class TexAnimator {
     }
     // AddPrim hängt vorn an die Ordnungstabelle an: Ausführung in umgekehrter Reihenfolge.
     const dirty = [];
+    this.lastMoves = [];   // die ausgeführten Kopien (Quelle + Ziel), für die HD-Vorschau
     for (let i = moves.length - 1; i >= 0; i--) {
       const r = this.move(...moves[i]);
-      if (r) dirty.push(r);
+      if (r) { dirty.push(r); this.lastMoves.push(moves[i]); }
     }
     return dirty;
   }

@@ -57,7 +57,8 @@ worker.onmessage = ev => {
 function pickFile(id, kind) {
   const input = document.createElement('input');
   input.type = 'file';
-  if (kind === 'image') input.accept = '.bin,.iso,.img';
+  if (kind === 'image') input.accept = '.bin,.iso,.img,.pak';
+  if (kind === 'dw3') input.accept = '.bin,.iso,.img';
   input.onchange = () => {
     const file = input.files && input.files[0];
     if (!file) { answer(id, { ok: false, error: 'Keine Datei gewählt.' }); return; }

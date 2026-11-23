@@ -56,3 +56,41 @@ table.plan{width:100%;font-size:12px;border-collapse:collapse}table.plan td{bord
 
 #anim-info { padding: 0 12px 6px; min-height: 1.2em; font-size: 12px; }
 #diag-info div { margin: 2px 0; }
+
+/* Animationseditor (0.96) */
+#ae-body table { width: 100%; border-collapse: collapse; font-size: .9em; }
+#ae-body td, #ae-body th { padding: 2px 4px; border-bottom: 1px solid rgba(255,255,255,.08); text-align: left; }
+.ae-places tr { cursor: pointer; }
+.ae-places tr.sel { background: rgba(80,160,255,.25); }
+.ae-segs input[type=number] { width: 4.2em; }
+.ae-segs select { max-width: 14em; }
+#ae-tl { width: 100%; height: 54px; background: #0b1420; border-radius: 4px; cursor: pointer; display: block; margin: 6px 0; }
+.st { display: inline-block; padding: 0 6px; border-radius: 8px; font-size: .8em; white-space: nowrap; }
+.st-data { background: #1f7a3a; color: #fff; }
+.st-auto { background: #2a5d9e; color: #fff; }
+.st-manual { background: #8a5a00; color: #fff; }
+.st-open { background: #8a1f1f; color: #fff; }
+.ae-play { flex-wrap: nowrap; align-items: center; }
+#ae-body .ae-play button { flex: 0 0 auto; min-width: 2.4em; padding: 4px 8px; }
+.ae-play #ae-pos { flex: 1 1 auto; font-size: .8em; }
+.ae-chain { white-space: nowrap; font-size: .8em; }
+#ae-body .btns { flex-wrap: wrap; }
+#ae-body .btns button, #ae-body .btns select { flex: 1 1 auto; }
+.ae-segs { font-size: .8em; }
+.ae-segs select { max-width: 9em; }
+.ae-segs input[type=number] { width: 3.4em; }
+#ae-body .ae-segs input, #ae-body .ae-segs select, #ae-body .row input[type=number] { padding: 2px 3px; min-height: 0; height: 26px; font-size: 12px; border-radius: 4px; box-sizing: border-box; }
+#ae-body .ae-segs select { width: 9em; }
+#ae-body .ae-segs input[type=number] { width: 3.4em; }
+#ae-body .ae-segs button.small { padding: 2px 5px; min-width: 0; }
+#ae-body .ae-segs td, #ae-body .ae-segs th { padding: 1px 2px; }
+.ae-scroll { overflow-x: auto; }
+
+/* DW3-Liste mit Namen (0.98) */
+.dw3-item { display: flex; gap: 10px; align-items: center; padding: 8px; border-bottom: 1px solid rgba(255,255,255,.08); cursor: pointer; }
+.dw3-item:hover { background: rgba(80,160,255,.12); }
+.dw3-item img, .dw3-noimg { width: 56px; height: 56px; border-radius: 6px; flex: 0 0 56px; object-fit: cover; background: #0b1420; }
+.dw3-noimg { display: flex; align-items: center; justify-content: center; font-size: 11px; color: #789; }
+.dw3-text { flex: 1 1 auto; min-width: 0; }
+.dw3-btns { display: flex; flex-direction: column; gap: 4px; }
+.dw3-item .warn { color: #e0b050; }
