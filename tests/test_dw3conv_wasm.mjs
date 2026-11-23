@@ -28,10 +28,29 @@ assert.equal(r.returncode, 0, r.stderr);
 assert.match(r.stdout, /2 bones, 1 meshes, 0 motions/);
 const n = spawnSync(native, [path.join(tmp, 'mini.bin'), path.join(tmp, 'out')]);
 assert.equal(n.status, 0);
-for (const f of ['model.glb', 'native_source.json', 'tex0.png']) {
-  const a = Buffer.from(src.readFile('/files/viewer/dw3/tmp/out/' + f));
-  const b = fs.readFileSync(path.join(tmp, 'out', f));
-  assert.ok(a.equals(b), f + ' identisch mit dem nativen Konverter');
+// Gleich bis auf Rundung im letzten Bit (anderer Compiler: Emscripten/clang gegen g++)
+function close(x, y, where) {
+  if (typeof x === 'number') { assert.ok(Math.abs(x - y) <= 1e-4 * Math.max(1, Math.abs(x)), `${where}: ${x} vs ${y}`); return; }
+  if (Array.isArray(x)) { assert.equal(x.length, y.length, where); x.forEach((v, i) => close(v, y[i], where + '/' + i)); return; }
+  if (x && typeof x === 'object') { assert.deepEqual(Object.keys(x).sort(), Object.keys(y).sort(), where); for (const k in x) close(x[k], y[k], where + '/' + k); return; }
+  assert.equal(x, y, where);
+}
+function glb(buf) {
+  const json = JSON.parse(buf.subarray(20, 20 + buf.readUInt32LE(12)).toString());
+  const at = 20 + buf.readUInt32LE(12);
+  const bin = buf.subarray(at + 8, at + 8 + buf.readUInt32LE(at));
+  return { json, bin };
+}
+const out = f => [Buffer.from(src.readFile('/files/viewer/dw3/tmp/out/' + f)), fs.readFileSync(path.join(tmp, 'out', f))];
+{
+  const [a, b] = out('tex0.png'); assert.ok(a.equals(b), 'tex0.png identisch');
+  const [ja, jb] = out('native_source.json'); close(JSON.parse(ja), JSON.parse(jb), 'native_source.json');
+  const [ga, gb] = out('model.glb').map(glb);
+  close(ga.json, gb.json, 'model.glb JSON');
+  assert.equal(ga.bin.length, gb.bin.length, 'model.glb Binärteil gleich lang');
+  const fa = new Float32Array(ga.bin.buffer, ga.bin.byteOffset, ga.bin.length >> 2), fb = new Float32Array(gb.bin.buffer, gb.bin.byteOffset, gb.bin.length >> 2);
+  let worst = 0; for (let i = 0; i < fa.length; i++) if (Number.isFinite(fa[i]) && Number.isFinite(fb[i])) worst = Math.max(worst, Math.abs(fa[i] - fb[i]) / Math.max(1, Math.abs(fa[i])));
+  assert.ok(worst < 1e-4, 'model.glb Binärdaten gleich bis auf Rundung: ' + worst);
 }
 // 2) Fehlerfall (kein Modell): gleicher Rückgabewert und gleiche Meldung
 src.writeFile('/files/bad.bin', new Uint8Array(64));
@@ -47,5 +66,5 @@ assert.equal(s.returncode, ns.status);
 // 4) zweiter Lauf in frischer Instanz liefert dasselbe
 const r2 = dw3convRun(create, src, ['/files/viewer/dw3/tmp/source.bin', '/files/viewer/dw3/tmp/out2']);
 assert.equal(r2.returncode, 0);
-assert.ok(Buffer.from(src.readFile('/files/viewer/dw3/tmp/out2/model.glb')).equals(fs.readFileSync(path.join(tmp, 'out', 'model.glb'))));
-console.log('WebAssembly-DW3-Konverter: 4 Prüfungen bestanden (identisch zum nativen Programm).');
+assert.ok(Buffer.from(src.readFile('/files/viewer/dw3/tmp/out2/model.glb')).equals(Buffer.from(src.readFile('/files/viewer/dw3/tmp/out/model.glb'))), 'zweiter Lauf identisch');
+console.log('WebAssembly-DW3-Konverter: 4 Prüfungen bestanden (gleich wie das native Programm).');
