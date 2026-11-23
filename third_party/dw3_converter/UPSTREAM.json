@@ -1,0 +1,11 @@
+{
+  "repository": "https://github.com/Feerdus95/dw3-model-viewer",
+  "commit": "b8a77d32cbdcad2a1385ccc49b98876090069ccb",
+  "license": "MIT",
+  "date_retrieved": "2026-11-14",
+  "adaptations": [
+    "Headless CLI and PNG writer",
+    "stage_export.cpp contains matrix helpers and StageEdit::fromModel from stage.cpp",
+    "Local SDL3/SDL.h declares only the export adapter; no SDL runtime"
+  ]
+}

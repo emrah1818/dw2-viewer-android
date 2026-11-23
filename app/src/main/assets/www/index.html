@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>DW2 3D Viewer</title>
+<title>DW2 Mod Studio</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="dw2bg.css">
+<link rel="stylesheet" href="desktop.css">
+<link rel="stylesheet" href="mobile.css">
 <script type="importmap">
 { "imports": { "three": "./lib/three.module.js", "three/addons/": "./lib/examples/jsm/" } }
 </script>
@@ -13,7 +15,8 @@
 <body>
 <header id="top">
   <img src="logo.png" alt="" width="34" height="34">
-  <div id="title"><b>DW2 · 3D VIEWER</b><span id="subtitle"></span></div>
+  <div id="title"><b id="app-title">DW2 MOD STUDIO</b><span id="subtitle"></span></div>
+  <button id="btn-studio" class="small" title="3D-Import, Rigging und Vollfarben in einem eigenen Mod-Projekt">Mod Studio</button>
   <button id="btn-open" class="primary small" data-i18n="BIN / ISO öffnen">BIN / ISO öffnen</button>
 </header>
 
@@ -21,7 +24,7 @@
   <section id="start" class="page active">
     <div class="card center">
       <img src="logo.png" alt="" width="96" height="96">
-      <h2>Digimon World 2 · 3D Viewer Studio</h2>
+      <h2 id="app-h2">DW2 Mod Studio</h2>
       <p data-i18n="start_text">Öffne dein eigenes Spiel-Image (BIN/ISO). Die App enthält keine Spieldaten.</p>
       <button id="btn-open2" class="primary big" data-i18n="BIN / ISO öffnen">BIN / ISO öffnen</button>
       <p class="hint" id="space-hint"></p>
@@ -29,12 +32,13 @@
   </section>
 
   <section id="page-list" class="page">
+    <div class="btns"><button id="dl-edit" class="primary small">Gewähltes Digimon bearbeiten</button><button id="dl-name" class="small">✎ Name ändern</button><button id="dl-view" class="small">3D-Ansicht</button></div>
     <input id="search" type="search" placeholder="Digimon suchen …" data-i18n-ph="Digimon suchen …">
     <div id="list"></div>
   </section>
 
   <section id="page-view" class="page">
-    <div id="stage"><div class="dw2bg" id="dw2bg"><div class="l1"></div><div class="l2l"></div><div class="l2r"></div><div class="l3"></div></div><div class="stage-panel"></div><div class="dw2frame stage-frame"></div><canvas id="gl"></canvas><div id="stage-msg"></div></div>
+    <div id="stage"><div class="dw2bg" id="dw2bg"><div class="l1"></div><div class="l2l"></div><div class="l2r"></div><div class="l3"></div></div><div class="stage-panel"></div><div class="dw2frame stage-frame"></div><canvas id="gl"></canvas><div id="stage-msg"></div><div id="cam-overlay" hidden><span id="cam-ov-text"></span> <button id="cam-ov-down" class="small">◀ Einstellung</button><button id="cam-ov-up" class="small">Einstellung ▶</button><button id="cam-ov-end" class="small">Beenden</button></div></div>
     <div id="viewbar" class="dw2win dw2frame">
       <button id="v-prev" aria-label="Zurück">◀</button>
       <div id="v-name">–</div>
@@ -64,6 +68,7 @@
       <label class="row"><input type="checkbox" id="o-grid"> <span data-i18n="Boden-Raster">Boden-Raster</span></label>
       <label class="row"><input type="checkbox" id="o-wire"> <span data-i18n="Drahtgitter">Drahtgitter</span></label>
       <label class="row"><input type="checkbox" id="o-nearest" checked> <span data-i18n="Pixel-Look (PS1)">Pixel-Look (PS1)</span></label>
+      <label class="row"><input type="checkbox" id="o-autohd" checked> <span data-i18n="Modus A: HD-Textur automatisch zeigen">Modus A: HD-Textur automatisch zeigen</span></label>
       <label class="row"><input type="checkbox" id="o-prefetch" checked> <span data-i18n="Nachbarmodelle vorbereiten">Nachbarmodelle vorbereiten</span></label>
       <label class="row"><span data-i18n="Licht">Licht</span> <input type="range" id="o-light" min="0.2" max="3" step="0.1" value="1.2"></label>
       <label class="row"><span data-i18n="Hintergrundfarbe (ohne Original-Hintergrund)">Hintergrundfarbe (ohne Original-Hintergrund)</span> <input type="color" id="o-bg" value="#16243a"></label>
@@ -77,6 +82,17 @@
       <label class="row"><input type="checkbox" id="c-blend" checked> <span data-i18n="PS1-Mischmodi (Halbtransparenz)">PS1-Mischmodi (Halbtransparenz)</span></label>
       <div id="diag-info" class="hint"></div>
       <div class="btns"><button id="b-native-zip" data-i18n="Rohdaten dieses Digimon exportieren (ZIP)">Rohdaten dieses Digimon exportieren (ZIP)</button></div>
+    </details>
+    <details class="card" id="dw3q-card" hidden>
+      <summary data-i18n="DW3-Import: Qualität (gemessen)">DW3-Import: Qualität (gemessen)</summary>
+      <div id="dw3q-info" class="hint"></div>
+      <div class="btns"><button id="b-dw3-source" data-i18n="DW3-Original ansehen">DW3-Original ansehen</button>
+        <button id="b-dw3-back" data-i18n="Konvertiertes Modell ansehen">Konvertiertes Modell ansehen</button>
+        <button id="b-anim-editor" class="primary" data-i18n="Animationen bearbeiten">Animationen bearbeiten</button></div>
+    </details>
+    <details class="card" id="animed-card" hidden>
+      <summary data-i18n="Animationen (DW3-Import)">Animationen (DW3-Import)</summary>
+      <div id="ae-body"></div>
     </details>
     <details class="card" id="tex-card">
       <summary data-i18n="Texturen">Texturen</summary>
@@ -95,6 +111,10 @@
         <button id="b-png-export" data-i18n="PNG exportieren">PNG exportieren</button>
         <button id="b-png-import" class="primary" data-i18n="PNG importieren / Textur ersetzen">PNG importieren / Textur ersetzen</button>
         <button id="b-eyes-import" data-i18n="Augen ersetzen">Augen ersetzen</button>
+        <button id="b-hd-pack">HD-PNG als PC-Port-Texturpack exportieren</button>
+        <button id="b-hd-preview">HD-PNG in der Vorschau zeigen</button>
+        <button id="b-hd-active">Vorgemerkte HD-Textur zeigen</button>
+        <button id="b-hd-off">HD-Vorschau aus</button>
       </div>
       <p class="hint" data-i18n="tex_note">Spieltextur: 128×256, 16 Farben je Palette. PNG in 1×–4× wird angenommen. Vor dem Vormerken zeigt die Vorschau das tatsächliche PS1-Ergebnis.</p>
     </details>
@@ -113,7 +133,10 @@
   <section id="page-edit" class="page">
     <div id="edit-head" class="card"><b id="edit-name">–</b><span id="edit-sub"></span></div>
     <details class="card" open><summary data-i18n="Name">Name</summary><div id="f-name"></div></details>
+    <details class="card"><summary>Größe im Spiel</summary><div id="f-size"></div></details>
     <details class="card"><summary data-i18n="Typ & Specialty">Typ & Specialty</summary><div id="f-type"></div></details>
+    <details class="card"><summary>Digitation & DP</summary><div id="f-evolution"></div></details>
+    <details class="card"><summary>Kampfkamera & Treffereffekt</summary><div id="f-camera"></div></details>
     <details class="card"><summary data-i18n="Attacken">Attacken</summary><div id="f-attacks"></div></details>
     <details class="card"><summary data-i18n="Gegnerwerte & EXP">Gegnerwerte & EXP</summary><div id="f-enemy"></div></details>
     <details class="card"><summary data-i18n="Spielstand / Memorycard">Spielstand / Memorycard</summary><div id="f-roster"></div></details>
@@ -123,18 +146,88 @@
     <div class="card">
       <b id="pending-count">0</b>
       <div id="pending-list"></div>
+      <p id="mode-banner" class="mode-banner"></p>
+      <div id="grp-ps1" class="mode-group">
+        <b data-i18n="Modus B: PS1-Image (BIN/CUE, IMG/CCD, ISO)">Modus B: PS1-Image (BIN/CUE, IMG/CCD, ISO)</b>
+        <div class="btns">
+          <button id="b-saveimg" class="primary" data-i18n="Neues Image exportieren">Neues Image exportieren</button>
+          <button id="b-overwrite" data-i18n="Image überschreiben …">Image überschreiben …</button>
+          <button id="b-backup" data-i18n="Sicherung exportieren" hidden>Sicherung exportieren</button>
+        </div>
+      </div>
+      <div id="grp-pc" class="mode-group">
+        <b data-i18n="Modus A: PC-Port (Mods-Ordner)">Modus A: PC-Port (Mods-Ordner)</b>
+        <div class="btns">
+          <button id="b-mod-check">Mod prüfen</button>
+          <button id="b-port-mod" class="primary">PC-Port-Mod exportieren</button>
+          <button id="b-mod-replace">Vorhandenen Mod ersetzen</button>
+          <button id="b-mod-import">Mod einlesen</button>
+          <button id="b-port-off">PC-Port-Mods deaktivieren</button>
+          <button id="b-port-on">PC-Port-Mods aktivieren</button>
+        </div>
+      </div>
       <div class="btns">
-        <button id="b-saveimg" class="primary" data-i18n="Neues Image exportieren">Neues Image exportieren</button>
         <button id="b-saveproj" data-i18n="Mod-Projekt speichern">Mod-Projekt speichern</button>
         <button id="b-loadproj" data-i18n="Mod-Projekt laden">Mod-Projekt laden</button>
         <button id="b-saveroster" data-i18n="Spielstand/Memorycard exportieren">Spielstand/Memorycard exportieren</button>
-        <button id="b-overwrite" data-i18n="Image überschreiben …">Image überschreiben …</button>
-        <button id="b-backup" data-i18n="Sicherung exportieren" hidden>Sicherung exportieren</button>
         <button id="b-undo2" data-i18n="Rückgängig">Rückgängig</button>
         <button id="b-redo2" data-i18n="Wiederherstellen">Wiederherstellen</button>
       </div>
+      <div id="mod-report"></div>
       <p class="hint" data-i18n="changes_note">Alle Änderungen sind zunächst nur vorgemerkt. „Neues Image exportieren“ erzeugt eine neue, geprüfte Datei; „Image überschreiben“ ersetzt dein Original (die alte Fassung bleibt als Sicherung in der App). Danach das Image im Emulator testen.</p>
     </div>
+  </section>
+
+
+  <section id="page-files" class="page">
+    <div class="card"><b>Datei-Explorer</b> <span id="files-source" class="hint"></span>
+      <div class="btns"><button id="fx-open" class="primary">dw2.pak / Image öffnen</button><button id="fx-dw3">DW3-Abbild öffnen</button>
+        <button id="fx-loadproj">Mod-Projekt laden</button><button id="fx-saveproj">Mod-Projekt speichern</button></div>
+      <input id="fx-q" type="search" placeholder="Datei suchen (Name oder LBA) …"><label class="row"><input type="checkbox" id="fx-edited"> nur geänderte</label>
+      <div id="fx-list" class="tablebox"></div></div>
+  </section>
+
+  <section id="page-attacks" class="page">
+    <div class="card"><b>Attacken-Editor</b> <span id="at-sub" class="hint"></span>
+      <p class="hint">Eigene Technik: Kopie einer vorhandenen Technik (Effekte, Animationsteile, Ton) unter einer freien ID mit eigenem Namen und eigenen Werten. Sie gehört nur dem gewählten Digimon; andere Digimon bleiben unverändert. Techniken, die mehrere Digimon nutzen, ändert dieser Editor nicht.</p>
+      <div class="btns"><button id="at-new" class="primary">Eigene Technik für gewähltes Digimon anlegen</button><button id="at-parts">Effekt/Ton/Animation übernehmen</button><button id="at-assign">Technik mehreren Digimon geben</button></div>
+      <p class="hint" id="at-budget"></p>
+      <input id="at-q" type="search" placeholder="Technik suchen …"><div id="at-list" class="tablebox"></div></div>
+  </section>
+
+  <section id="page-evo" class="page">
+    <div class="card"><b>Digitations-Editor</b> <span id="evo-sub" class="hint"></span>
+      <p class="hint">Eine Linie ab dem gewählten Digimon (bis zu vier Stufen). Alle Zeilen werden zusammen geprüft und als ein Schritt vorgemerkt. Ziele, DP-Untergrenzen (streng steigend, erste 0) und Stufe sind die Felder aus DIGIMNDT. Das Digitationslevel ist kein Datenfeld: Das Digi-Labor erlaubt Rookie ab Level 11, Champion ab 21, Ultimate ab 31, Mega nie (Stg20_DigivolveRuleTbl, src/stag2000/labinfo.c), für alle Arten gleich. Eine eigene Grenze je Art bräuchte eine Erweiterung des PC-Ports (DIGITATIONSLEVEL_SCHNITTSTELLE.md).</p>
+      <div id="evo-line"></div>
+      <div class="btns"><button id="evo-add">Digimon zur Linie hinzufügen</button><button id="evo-save" class="primary">Linie übernehmen</button><button id="evo-check">Alle Digitationen prüfen</button></div>
+      <div id="evo-report"></div></div>
+    <div class="card" id="dna-card"><b>DNA-Digitation</b>
+      <p class="hint">Zwei Partner auswählen und Ergebnis sowie Stufe festlegen. A + B und B + A verwenden dieselbe Regel. Die Ergebnisstufe gilt im PC-Port für diese Digimon-Art überall; alle Regeln mit demselben Ergebnis müssen dieselbe Stufe verwenden. Startlevel: Rookie 1, Champion 11, Ultra 21, Mega 31. Mega übernimmt die Vererbungsfaktoren von Ultra. Die Club-Beschränkungen des Digi-Labors gelten weiter. Benötigt den PC-Port mit DNA-Unterstützung. Nach Mod-Änderungen das Spiel neu starten.</p>
+      <div class="row"><label>Partner A <select id="dna-a"></select></label><label>Partner B <select id="dna-b"></select></label></div>
+      <div class="row"><label>Ergebnis <select id="dna-result"></select></label><label>Stufe <select id="dna-rank"><option value="0">Rookie</option><option value="1">Champion</option><option value="2">Ultra (Ultimate)</option><option value="3">Mega</option></select></label><button id="dna-save" class="primary">DNA-Regel speichern</button></div>
+      <div id="dna-list"></div><p class="hint" id="dna-note"></p>
+    </div>
+    <div class="card" id="lv-card"><b>Digitationslevel je Digimon (Vorbereitung)</b>
+      <p class="hint" id="lv-note"></p>
+      <div class="row"><span id="lv-who">–</span> Mindestlevel <input id="lv-val" type="number" min="1" max="99" placeholder="Spielregel"> <button id="lv-set" class="small">Speichern</button><button id="lv-clear" class="small">Spielregel</button></div>
+      <div id="lv-list" class="hint"></div></div>
+  </section>
+
+  <section id="page-domains" class="page">
+    <div class="card"><b>Domain-Editor</b> <span id="dom-sub" class="hint"></span>
+      <p class="hint">Je Etage fünf Gruppenplätze (Stg40DungFloor.enemySets). Das Spiel wählt Gruppen über die Plätze 1–4 der Etage; Platz 0 liest es beim Erzeugen nicht. Gruppe 0 = leer.</p>
+      <select id="dom-pick"></select><div id="dom-floors"></div></div>
+    <div class="card"><b>Gegnergruppe</b> <select id="grp-pick"></select> <button id="grp-clone" class="small">Als neue Gruppe kopieren</button>
+      <div id="grp-edit"></div></div>
+  </section>
+
+  <section id="page-dw3" class="page">
+    <div class="card"><b>DW3-Importer</b> <span id="dw3-sub" class="hint"></span>
+      <div class="btns"><button id="dw3-open">DW3-Abbild öffnen</button></div>
+      <p class="hint">Einzeln: Modell wählen, dann „Einzeln importieren“ (mit Bewegungszuordnung). Mehrere auf einmal: Paare in die Liste und „Alle importieren“; Bewegungen, Kamera und Größe werden automatisch gesetzt, alles ist ein Rückgängig-Schritt.</p>
+      <input id="dw3-q" type="search" placeholder="Name, Kürzel oder ID suchen (z. B. WarGreymon, WGRE, 213) …" data-i18n-ph="Name, Kürzel oder ID suchen (z. B. WarGreymon, WGRE, 213) …"><div id="dw3-count" class="hint"></div><div id="dw3-list" class="tablebox"></div>
+      <b>Stapel</b><div id="dw3-batch"></div>
+      <div class="btns"><button id="dw3-run" class="primary">Alle importieren</button><button id="dw3-clear">Stapel leeren</button></div></div>
   </section>
 
   <section id="page-more" class="page">
@@ -150,10 +243,16 @@
 </main>
 
 <nav id="tabs">
-  <button data-page="page-list" class="tab">☰<span data-i18n="Digimon">Digimon</span></button>
-  <button data-page="page-view" class="tab">◈<span>3D</span></button>
-  <button data-page="page-edit" class="tab">✎<span data-i18n="Bearbeiten">Bearbeiten</span></button>
-  <button data-page="page-changes" class="tab">✔<span data-i18n="Änderungen">Änderungen</span><i id="badge" hidden>0</i></button>
+  <button data-page="page-files" class="tab">▤<span>Dateien</span></button>
+  <button data-page="page-view" class="tab">◈<span>3D-Viewer</span></button>
+  <button data-page="page-list" class="tab">☰<span>Digimon</span></button>
+  <button data-page="page-edit" class="tab">✎<span>Bearbeiten</span></button>
+  <button data-page="page-attacks" class="tab">✦<span>Attacken</span></button>
+  <button data-page="page-evo" class="tab">⇧<span>Digitation</span></button>
+  <button data-page="page-domains" class="tab">⌘<span>Domains</span></button>
+  <button data-page="page-dw3" class="tab">③<span>DW3-Import</span></button>
+  <button data-page="page-tex" class="tab">▣<span>Texturen</span></button>
+  <button data-page="page-changes" class="tab">✔<span>Mod-Export</span><i id="badge" hidden>0</i></button>
   <button data-page="page-more" class="tab">⋯<span data-i18n="Mehr">Mehr</span></button>
 </nav>
 
@@ -161,6 +260,12 @@
 <div id="toast" hidden></div>
 <div id="modal" hidden><div id="modal-box"></div></div>
 
-<script type="module" src="app.js"></script>
+<script type="module">
+await window.__desktopReady;
+try { await import("./app.js"); } catch (e) {
+ document.getElementById("start").textContent = "3D Viewer konnte nicht gestartet werden: " + e.message;
+ console.error(e);
+}
+</script>
 </body>
 </html>

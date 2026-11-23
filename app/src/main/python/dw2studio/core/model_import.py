@@ -134,7 +134,8 @@ def _rewrite_references(obj, staged_obj, source_base):
         target.write_text('\n'.join(out)+'\n',encoding='utf-8')
 
 def _gltf_refs(source):
-    doc=json.loads(source.read_text(encoding='utf-8'))
+    from .gltf_textures import document
+    doc=document(source)
     return [x['uri'] for x in doc.get('buffers',[])+doc.get('images',[]) if x.get('uri') and not x['uri'].startswith('data:')]
 
 def stage_model(source, destination):
@@ -148,7 +149,7 @@ def stage_model(source, destination):
         extra,skipped=obj_dependencies(source)
         files.update(extra)
     else:
-        refs=_gltf_refs(source) if source.suffix.lower()=='.gltf' else []
+        refs=_gltf_refs(source)
         for ref in refs:
             dependency=_local_dependency(source.parent,ref)
             rel=dependency.relative_to(source.parent)

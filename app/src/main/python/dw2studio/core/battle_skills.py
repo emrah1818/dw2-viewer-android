@@ -33,8 +33,12 @@ def skill_label(record, changes=None):
     return f'{record.identifier:02X} · {record.name} · {mp} MP · {power_label(power)}'
 
 
-def text_at(data, pointer, limit):
-    if not 4 <= pointer < limit:
+def text_at(data, pointer, limit, tail=None):
+    # TAIL: (start, end) of the text area behind the end record, used by techniques
+    # 0.17b added (Skill_GetNameText adds the offset to the file base; any offset works).
+    if tail and tail[0] <= pointer < tail[1]:
+        limit = tail[1]
+    elif not 4 <= pointer < limit:
         raise ValueError('WAZADATA-Textzeiger liegt außerhalb des Textblocks.')
     end = data.find(b'\xff', pointer, limit)
     if end < 0:
@@ -60,6 +64,24 @@ class Skill:
 
 
 class SkillTable:
+    def _text(self, data, pointer, start):
+        # Texts behind the end record: only after a complete 68-byte zero end row.
+        tail = None
+        if pointer >= start:
+            end = self._find_end(data, start)
+            if end is not None and pointer >= end + 68:
+                tail = (end + 68, len(data))
+        return text_at(data, pointer, start, tail)
+
+    @staticmethod
+    def _find_end(data, start):
+        at = start
+        while at + 2 <= len(data):
+            if struct.unpack_from('<h', data, at)[0] == 0:
+                return at
+            at += 68
+        return None
+
     def __init__(self, data):
         self.data = bytes(data)
         if not 72 <= len(data) <= 4*1024*1024:
@@ -91,7 +113,7 @@ class SkillTable:
             bits = struct.unpack_from('<I', data, offset)[0]
             name, desc = struct.unpack_from('<II', data, offset+0x24)
             self.records[identifier] = Skill(identifier, offset,
-                text_at(data, name, start), text_at(data, desc, start), data[offset+4],
+                self._text(data, name, start), self._text(data, desc, start), data[offset+4],
                 struct.unpack_from('<h', data, offset+8)[0], (bits >> 18) & 3,
                 (bits >> 20) & 15, (bits >> 24) & 15, bits >> 28, (bits >> 16) & 3)
             offset += 68
@@ -125,6 +147,82 @@ class SkillTable:
         result = bytes(out)
         SkillTable(result)
         return result
+
+    def free_ids(self):
+        # DIGIMNDT/ENEMYSET and the roster store technique ids as one byte.
+        return [i for i in range(1, 256) if i not in self.records]
+
+    def cloned(self, source, new_id, name, description=None, values=None):
+        """Copy of technique SOURCE (all 68 bytes: effects, parts, XA sound, flags) as NEW_ID.
+
+        Skill_FindById (src/main/skill.c) scans the 68-byte records up to an id of 0 and every
+        Skill_Get* reads the record found, so the copy is independent of SOURCE. The new name
+        (and description, if given) go behind a full zero end row; the copy's text offsets
+        point there. Other records and texts keep their bytes."""
+        from .digimon_names import encode_name
+        if source not in self.records:
+            raise ValueError(f'Technik {source} fehlt in WAZADATA.')
+        if type(new_id) is not int or not 1 <= new_id <= 255 or new_id in self.records:
+            raise ValueError('Neue Technik-ID muss frei und 1–255 sein (einbytekodiert in DIGIMNDT/ENEMYSET).')
+        encoded = _encode_text(name, 17, 'Technikname')
+        desc = _encode_text(description, 120, 'Beschreibung', allow_newline=True) if description else None
+        end = self._find_end(self.data, self.records_start)
+        if end is None:
+            raise ValueError('WAZADATA ohne Endeintrag.')
+        tail = self.data[end + 68:] if len(self.data) >= end + 68 else b''
+        if tail and any(tail[:4]) and end + 68 > len(self.data):
+            raise ValueError('WAZADATA-Ende nicht erkannt.')
+        out = bytearray(self.data[:end])
+        record = bytearray(self.data[self.records[source].offset:self.records[source].offset + 68])
+        struct.pack_into('<h', record, 0, new_id)
+        out += record
+        out += bytes(68)                              # end row: id 0
+        old_tail = bytes(tail).rstrip(b'\0')
+        base = len(out)
+        out += old_tail                               # texts added earlier keep their offsets
+        shift = base - (end + 68)
+        if shift and old_tail:
+            # earlier tail texts moved by one record: fix the offsets that point into them
+            for rec in list(self.records.values()):
+                for field in (0x24, 0x28):
+                    at = rec.offset + field
+                    if at >= end:
+                        continue
+                    pointer = struct.unpack_from('<I', out, at)[0]
+                    if end + 68 <= pointer < end + 68 + len(old_tail):
+                        struct.pack_into('<I', out, at, pointer + shift)
+        name_at = len(out)
+        out += encoded + b'\xff'
+        struct.pack_into('<I', out, end + 0x24, name_at)
+        if desc is not None:
+            desc_at = len(out)
+            out += desc + b'\xff'
+            struct.pack_into('<I', out, end + 0x28, desc_at)
+        out += bytes(-len(out) % 4)
+        if len(out) < len(self.data):
+            # same length as before when it fits: the port's version-1 loader keeps the file size
+            out += bytes(len(self.data) - len(out))
+        result = SkillTable(bytes(out))
+        if values:
+            return result.changed({new_id: values})
+        return result.data
+
+
+def _encode_text(text, limit, what, allow_newline=False):
+    from .digimon_names import ENCODE
+    if not isinstance(text, str) or not text.strip() or text != text.strip():
+        raise ValueError(f'{what}: nicht leer, ohne Leerzeichen am Anfang/Ende.')
+    if len(text) > limit:
+        raise ValueError(f'{what}: höchstens {limit} Zeichen.')
+    out = bytearray()
+    for c in text:
+        if c == '\n' and allow_newline:
+            out.append(0xFE)
+        elif c in ENCODE:
+            out.append(ENCODE[c])
+        else:
+            raise ValueError(f'{what}: Zeichen {c!r} gibt es im US-Zeichensatz nicht.')
+    return bytes(out)
 
 
 class BaseTable:

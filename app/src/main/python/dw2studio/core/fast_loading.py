@@ -2,7 +2,13 @@
 from collections import OrderedDict
 from dataclasses import asdict,dataclass
 from pathlib import Path
-import hashlib,json,os,shutil,tempfile,time
+import hashlib,json,os,shutil,tempfile,time,threading
+try:
+    from PyQt6.QtCore import QThread,pyqtSignal
+except ImportError:  # Android/Web: nur die Qt-freien Funktionen werden benutzt
+    QThread=object
+    def pyqtSignal(*_a,**_k):
+        return None
 from .disc import Disc,Entry
 from .catalog import build_catalog
 from .recovery import recover_entries
@@ -62,7 +68,49 @@ class ModelRequest:
     candidate:object
     converter:str
     overrides:dict
-    aliases:dict=None   # Eintragsschlüssel (path,lba) -> Zieldateiname (Spielzuordnung A–K aus MODELDT)
+    aliases:dict=None   # (path,lba) -> one destination name or several MODELDT slot names
+
+
+def extract_request(job, source, cancel=lambda:False):
+    """Read a physical file once, then materialize all of its logical slots.
+
+    Conflicting destination names are rejected instead of silently overwriting
+    another file. This is shared by the direct and queued conversion paths.
+    """
+    disc = Disc(job.image)
+    written = {}
+    try:
+        for entry in job.entries:
+            if cancel():
+                raise RuntimeError('Konvertierung abgebrochen')
+            name = Path(entry.path.replace('\\', '/')).name
+            destinations = (job.aliases or {}).get((entry.path, entry.lba), name)
+            if isinstance(destinations, str):
+                destinations = [destinations]
+            origin = (entry.path, entry.lba, entry.size)
+            pending = []
+            for target in destinations:
+                if not isinstance(target, str) or Path(target).name != target or '\\' in target or target in ('.', '..'):
+                    raise ValueError('Ungültiger Konvertierungs-Dateiname.')
+                key = target.upper()
+                if key in written:
+                    if written[key] != origin:
+                        raise ValueError(f'Widersprüchliche Modell-Dateizuordnung: {target}.')
+                    continue
+                written[key] = origin
+                pending.append(target)
+            if not pending:
+                continue
+            data = job.overrides.get(name)
+            first = source / pending[0]
+            if data is None:
+                disc.extract(entry, first)
+            else:
+                first.write_bytes(data)
+            for target in pending[1:]:
+                shutil.copyfile(first, source / target)
+    finally:
+        disc.close()
 
 
 def build_model(job,convert,cancel=lambda:False):
@@ -75,16 +123,8 @@ def build_model(job,convert,cancel=lambda:False):
         except ValueError:pass
     job.folder.mkdir(parents=True,exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='conversion-',dir=job.folder) as temp:
-        source=Path(temp)/'native';output=Path(temp)/'converted';source.mkdir();output.mkdir();disc=Disc(job.image)
-        try:
-            for entry in job.entries:
-                if cancel():raise RuntimeError('Konvertierung abgebrochen')
-                name=Path(entry.path.replace('\\','/')).name
-                data=job.overrides.get(name)
-                target=(job.aliases or {}).get((entry.path,entry.lba),name)
-                if data is None:disc.extract(entry,source/target)
-                else:(source/target).write_bytes(data)
-        finally:disc.close()
+        source=Path(temp)/'native';output=Path(temp)/'converted';source.mkdir();output.mkdir()
+        extract_request(job, source, cancel)
         if not any(source.iterdir()):raise ValueError('Keine extrahierten Modell-Dateien gefunden')
         convert(source,output)
         models=candidate_models(output,job.candidate)
@@ -94,3 +134,72 @@ def build_model(job,convert,cancel=lambda:False):
         if target.exists():shutil.rmtree(target)
         os.replace(output,target)
         return target/relative
+
+
+class DiscReader(QThread):
+    done=pyqtSignal(object,object,object);failed=pyqtSignal(str)
+    def __init__(self,path,cache):super().__init__();self.path=path;self.cache=cache
+    def run(self):
+        try:
+            result=scan_image(self.path,self.cache)
+            if not self.isInterruptionRequested():self.done.emit(*result)
+        except Exception as exc:
+            if not self.isInterruptionRequested():self.failed.emit(str(exc))
+
+
+class ConversionQueue(QThread):
+    ready=pyqtSignal(str,str,float);failed=pyqtSignal(str,str)
+    def __init__(self):
+        super().__init__();self.condition=threading.Condition();self.jobs=OrderedDict();self.priority=None;self.active=None;self.active_cancelled=False
+    def submit(self,request,foreground=True):
+        with self.condition:
+            if foreground:
+                previous=self.priority;self.priority=request.key
+                if self.active is not None and self.active!=request.key:self.active_cancelled=True
+                if previous and previous!=self.active:self.jobs.pop(previous,None)
+            if request.key!=self.active or self.active_cancelled:self.jobs[request.key]=request
+            self.condition.notify_all()
+    def cancelled(self):
+        with self.condition:return self.isInterruptionRequested() or self.active_cancelled or (self.priority is not None and self.priority!=self.active)
+    def clear(self):
+        with self.condition:self.jobs.clear();self.priority=None;self.active_cancelled=True;self.condition.notify_all()
+    def stop(self):
+        self.requestInterruption()
+        with self.condition:self.condition.notify_all()
+    def run(self):
+        while not self.isInterruptionRequested():
+            with self.condition:
+                while not self.jobs and not self.isInterruptionRequested():self.condition.wait(.2)
+                if self.isInterruptionRequested():return
+                key=self.priority if self.priority in self.jobs else next(iter(self.jobs));job=self.jobs.pop(key);self.active=key;self.active_cancelled=False
+            started=time.perf_counter()
+            try:
+                result=self.convert(job)
+                if not self.cancelled():self.ready.emit(job.key,str(result),time.perf_counter()-started)
+            except Exception as exc:
+                if not self.cancelled():self.failed.emit(job.key,str(exc))
+            finally:
+                with self.condition:
+                    if self.priority==key and key not in self.jobs:self.priority=None
+                    self.active=None
+    def convert(self,job):
+        existing=candidate_models(job.folder/'converted',job.candidate)
+        if existing:
+            try:
+                if existing[0].suffix.lower()=='.gltf':json.loads(existing[0].read_text(encoding='utf-8'))
+                return existing[0]
+            except ValueError:pass
+        job.folder.mkdir(parents=True,exist_ok=True)
+        # A cancelled conversion never publishes a half-written glTF cache entry.
+        with tempfile.TemporaryDirectory(prefix='conversion-',dir=job.folder) as temp:
+            source=Path(temp)/'native';output=Path(temp)/'converted';source.mkdir()
+            extract_request(job, source, self.cancelled)
+            convert_models(job.converter,source,output,cancel=self.cancelled)
+            if self.cancelled():raise RuntimeError('Konvertierung abgebrochen')
+            models=candidate_models(output,job.candidate)
+            if not models:raise ValueError('Konverter hat kein passendes Modell erzeugt.')
+            if models[0].suffix.lower()=='.gltf':json.loads(models[0].read_text(encoding='utf-8'))
+            relative=models[0].relative_to(output);target=job.folder/'converted'
+            if target.exists():shutil.rmtree(target)
+            os.replace(output,target)
+            return target/relative

@@ -11,6 +11,12 @@ class Entry:
     directory: bool
 
 class Disc:
+    def __new__(cls, path, **kwargs):
+        if cls is Disc and Path(path).suffix.lower() == '.pak':
+            from dw2studio.pak_workspace import PakDisc
+            return PakDisc(path)
+        return super().__new__(cls)
+
     def __init__(self, path, *, sector_size=None):
         self.source = Path(path)
         suffix = self.source.suffix.lower()

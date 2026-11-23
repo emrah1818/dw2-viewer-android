@@ -10,8 +10,10 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
+sys.path.insert(0, str(ROOT / 'tests/studio_extra'))
 from playwright.sync_api import sync_playwright  # noqa: E402
 from test_native_anim import make_iso  # noqa: E402
+from fixture_dw3 import make_dw3_iso  # noqa: E402
 
 SHOTS = Path(sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp()); SHOTS.mkdir(parents=True, exist_ok=True)
 
@@ -20,6 +22,7 @@ def main():
     subprocess.run([sys.executable, str(ROOT / 'web/build_web.py'), str(ROOT / 'build/web')], check=True)
     tmp = Path(tempfile.mkdtemp())
     iso = make_iso(tmp)
+    dw3_iso = make_dw3_iso(tmp)
     handler = functools.partial(http.server.SimpleHTTPRequestHandler, directory=str(ROOT / 'build/web'))
     handler.log_message = lambda *a: None
     server = http.server.ThreadingHTTPServer(('127.0.0.1', 0), handler)
@@ -70,6 +73,29 @@ def main():
         page.wait_for_selector('#modal-box h3', timeout=120000)
         step('Animationsprüfung im Browser', 'Modelle: 2' in page.inner_text('#modal-box'))
         page.click('#m-no')
+
+        # 6.0: DW3-Abbild öffnen, Modell mit dem WebAssembly-Konverter umwandeln und ansehen
+        page.click('.tab[data-page="page-dw3"]')
+        with page.expect_file_chooser() as fc:
+            page.click('#dw3-open')
+        fc.value.set_files(str(dw3_iso))
+        page.wait_for_selector('#dw3-list .dw3-item', timeout=120000)
+        step('DW3-Abbild im Browser geöffnet', page.locator('#dw3-list .dw3-item').count() == 1)
+        r = ev("""new Promise(res => { const id = 'w' + Date.now(); const old = window.__resolve;
+            window.__resolve = (i, j) => { if (i === id) { window.__resolve = old; res(JSON.parse(j)); } else old(i, j); };
+            window.Android.invoke(id, 'prepare_dw3', '[0]'); })""")
+        step('DW3-Modell mit WebAssembly-Konverter umgewandelt', r.get('ok') and str(r['data'].get('url', '')).startswith('blob:'), str(r)[:160])
+        page.locator('#dw3-list .dw3-item').first.click()
+        page.wait_for_timeout(2500)
+        page.screenshot(path=SHOTS / 'web_dw3.png')
+        step('DW3-Modell angezeigt', ev("document.querySelector('#stage-msg').textContent") == '', ev("document.querySelector('#stage-msg').textContent"))
+
+        # 6.0: DNA im Image – das Test-Image hat kein Digi-Labor-Overlay, das wird sauber gemeldet
+        r = ev("""new Promise(res => { const id = 'd' + Date.now(); const old = window.__resolve;
+            window.__resolve = (i, j) => { if (i === id) { window.__resolve = old; res(JSON.parse(j)); } else old(i, j); };
+            window.Android.invoke(id, 'dna_info', '[]'); })""")
+        step('DNA im Browser: Python-Teil geladen, fehlendes Overlay gemeldet', r.get('ok') and r['data'].get('image') is False
+             and 'STAG2000' in r['data'].get('problem', ''), str(r)[:160])
         browser.close()
     server.shutdown()
     real = [e for e in errors if 'favicon' not in e]

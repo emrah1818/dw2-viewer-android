@@ -171,10 +171,10 @@ class MainActivity : AppCompatActivity() {
     /** Kopiert die gewählte Datei in den App-Speicher und übergibt sie an Python. */
     private fun handlePicked(id: String, kind: String, uri: Uri) {
         try {
-            val folder = File(filesDir, if (kind == "image") "images" else "imports").apply { mkdirs() }
+            val folder = File(filesDir, when (kind) { "image" -> "images"; "dw3" -> "dw3images"; else -> "imports" }).apply { mkdirs() }
             val name = (query(uri, OpenableColumns.DISPLAY_NAME) ?: "datei").replace(Regex("[^A-Za-z0-9._ -]"), "_")
             val size = query(uri, OpenableColumns.SIZE)?.toLongOrNull() ?: -1L
-            if (kind == "image") folder.listFiles()?.forEach { it.delete() }   // nur ein Image gleichzeitig
+            if (kind == "image" || kind == "dw3") folder.listFiles()?.forEach { it.delete() }   // nur ein Image gleichzeitig
             if (size > 0 && folder.usableSpace < size + (64L shl 20)) {
                 resolve(id, error("Zu wenig Speicherplatz: ${size shr 20} MB nötig, ${folder.usableSpace shr 20} MB frei."))
                 return
@@ -206,8 +206,8 @@ class MainActivity : AppCompatActivity() {
                 resolve(id, ok(JSONObject().put("path", target.absolutePath).put("name", name)))
                 return
             }
-            val method = when (kind) { "image" -> "open_image"; "roster" -> "roster_open"; else -> "load_project" }
-            progress(if (kind == "image") "Image wird analysiert …" else "Datei wird gelesen …", -1)
+            val method = when (kind) { "image" -> "open_image"; "dw3" -> "open_dw3"; "roster" -> "roster_open"; else -> "load_project" }
+            progress(when (kind) { "image" -> "Image wird analysiert …"; "dw3" -> "DW3-Dateien werden gesucht …"; else -> "Datei wird gelesen …" }, -1)
             resolve(id, py.call(method, JSONArray().put(target.absolutePath).toString()))
         } catch (e: Throwable) {
             resolve(id, error(e.message ?: e.javaClass.simpleName))
@@ -223,7 +223,7 @@ class MainActivity : AppCompatActivity() {
                     val exported = JSONArray(argsJson).getString(0)
                     pool.execute { overwriteOriginal(id, exported) }
                 }
-                "pick_image", "pick_roster", "pick_project", "pick_file" -> runOnUiThread {
+                "pick_image", "pick_dw3", "pick_roster", "pick_project", "pick_file" -> runOnUiThread {
                     pendingPick = id to method.removePrefix("pick_")
                     pickFile.launch(arrayOf("*/*"))
                 }

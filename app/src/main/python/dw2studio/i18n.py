@@ -336,3 +336,12 @@ EN.update({
 EN.update({'DW2 · 3D Viewer v3.6.1':'DW2 · 3D Viewer v3.6.1'})
 
 EN.update({'DW2 · 3D Viewer v3.7':'DW2 · 3D Viewer v3.7'})
+
+
+
+# 6.0 (Android-App / Web-Version: nur PS1-Image)
+EN.update({
+    'Die mobile Version bearbeitet nur PS1-Images (BIN/ISO). dw2.pak und PC-Port-Mods bitte im Mod Studio am PC bearbeiten.': 'The mobile version edits PS1 images (BIN/ISO) only. Please edit dw2.pak and PC-port mods in the Mod Studio on the PC.',
+    'DW3-Konverter (WebAssembly) nicht geladen.': 'DW3 converter (WebAssembly) not loaded.',
+    'DW3-Konverter fehlt (tools/build_dw3_converter.py).': 'DW3 converter missing (tools/build_dw3_converter.py).',
+})

@@ -52,7 +52,15 @@ export class Viewer {
     const p = this.canvas.parentElement;
     const w = Math.max(1, p.clientWidth), h = Math.max(1, p.clientHeight);
     this.renderer.setSize(w, h, false);
-    this.camera.aspect = w / h;
+    if (this.battleAspect) {   // 4:3-Bild des Spiels, mittig; außen bleibt der Hintergrund
+      const vw = Math.min(w, h * this.battleAspect), vh = vw / this.battleAspect;
+      const x = (w - vw) / 2, y = (h - vh) / 2;
+      this.renderer.setViewport(x, y, vw, vh); this.renderer.setScissor(x, y, vw, vh); this.renderer.setScissorTest(true);
+      this.camera.aspect = this.battleCamAspect || this.battleAspect;
+    } else {
+      this.renderer.setViewport(0, 0, w, h); this.renderer.setScissorTest(false);
+      this.camera.aspect = w / h;
+    }
     this.camera.updateProjectionMatrix();
   }
 
@@ -111,6 +119,7 @@ export class Viewer {
     this.model.position.sub(new THREE.Vector3(center.x, box.min.y, center.z));
     this.grid.scale.setScalar(Math.max(r / 5, 0.1));
     this.camera.near = r / 100; this.camera.far = r * 100; this.camera.updateProjectionMatrix();
+    if (this.savedCam) this.endBattleCamera();
     this.home.pos.set(0, size.y * 0.6, r * 2.1);
     this.home.target.set(0, size.y * 0.45, 0);
     this.resetCamera();
@@ -263,8 +272,53 @@ export class Viewer {
     if (this.channels.bones && (ticks > 0 || this.smooth)) this.applyPose(false, this.smooth ? Math.min(1, (n.player.timer + n.acc) / 2) : 0);
   }
 
+  /** HD-Vorschau: ein PNG (128×256 mal 1–16, bis 2048×4096) ersetzt die Seite aller Materialien. */
+  async setHdPreview(url) {
+    const n = this.native;
+    if (!n || !n.textures.length) throw new Error('Kein natives Modell geladen.');
+    const img = await new THREE.ImageLoader().loadAsync(url);
+    const max = this.renderer.capabilities.maxTextureSize;
+    if (img.width > max || img.height > max) throw new Error(`Grafikkarte erlaubt höchstens ${max} Pixel Kantenlänge.`);
+    // eine Leinwand statt eines festen Bildes: Blinzeln und Texturzyklen kopieren dieselben Rechtecke
+    // wie im Spiel (DR_MOVE) auch im HD-Bild, wie der PC-Port (TexRep_OnMove)
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width; canvas.height = img.height;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(img, 0, 0);
+    const tex = new THREE.CanvasTexture(canvas);
+    n.hdCanvas = { ctx, base: ctx.getImageData(0, 0, img.width, img.height), k: img.width / 128 };
+    tex.colorSpace = THREE.SRGBColorSpace; tex.flipY = false;
+    this.filter(tex);   // Pixel-Look gilt auch für HD: Auflösung und Filter sind getrennt
+    tex.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    this.clearHdPreview();
+    n.hd = tex;
+    for (const t of n.textures) { t.mat.map = tex; t.mat.needsUpdate = true; }
+    if (n.tex) { n.tex.reset(); this.refreshTextures([[0, 0, 128, 256]]); }
+    return { width: img.width, height: img.height, max };
+  }
+
+  clearHdPreview() {
+    const n = this.native;
+    if (!n?.hd) return;
+    for (const t of n.textures) { t.mat.map = t.tex; t.mat.needsUpdate = true; }
+    n.hd.dispose(); n.hd = null; n.hdCanvas = null;
+  }
+
   refreshTextures(rects) {
     const n = this.native;
+    if (n.hd) {   // HD-Vorschau: dieselben Kopien im HD-Bild, immer aus dem unveränderten HD-Original
+      const h = n.hdCanvas, k = h?.k;
+      if (!h) return;
+      if (rects.length === 1 && rects[0][2] - rects[0][0] >= 128 && rects[0][3] - rects[0][1] >= 256) {
+        h.ctx.putImageData(h.base, 0, 0);   // zurückgesetzt
+      } else {
+        for (const [sx, sy, w, hh, dx, dy] of n.tex.lastMoves || []) {
+          h.ctx.putImageData(h.base, (dx - sx) * 4 * k, (dy - sy) * k, sx * 4 * k, sy * k, w * 4 * k, hh * k);
+        }
+      }
+      n.hd.needsUpdate = true;
+      return;
+    }
     const palette = rects.some(r => r[3] > 224);
     for (const t of n.textures) {
       if (palette) decodeRect(n.tex.vram, t.clut, t.stp, t.rgba);
@@ -318,6 +372,63 @@ export class Viewer {
     };
   }
 
+  /** Kampf-Nahaufnahme wie im Spiel (Stg30_CameraUpdate 2–7): Werte in DW2-Einheiten, y nach oben.
+   *  Senkrechter Bildwinkel aus der Projektion 0x5DC auf 240 Zeilen; das Modell steht im Ursprung. */
+  battleCamera(c) {
+    if (!this.model) return;
+    if (!this.savedCam) this.savedCam = { fov: this.camera.fov, near: this.camera.near, far: this.camera.far,
+      pos: this.camera.position.clone(), target: this.controls.target.clone() };
+    // Kampfbild 320 × 480 GTE-Einheiten, angezeigt 4:3: senkrechter Winkel aus 240 Zeilen, waagerecht 160
+    this.camera.fov = 2 * Math.atan((c.screen[1] / 2) / c.projection) * 180 / Math.PI;
+    this.battleCamAspect = c.screen[0] / c.screen[1];
+    this.camera.near = 50; this.camera.far = 200000;
+    // Das Spiel stellt den Modellursprung auf den Boden; die Ansicht hat das Modell auf seine Unterkante
+    // verschoben. Die Kamera wandert mit, damit der Bildausschnitt dem Spiel entspricht.
+    const o = this.model.position;
+    if (c.eye) {   // Kampfeinstellung aus battle_shots.preview: Punkte in Modellachsen um den Ursprung
+      this.camera.position.set(o.x + c.eye[0], o.y + c.eye[1], o.z + c.eye[2]);
+      this.controls.target.set(o.x + c.target[0], o.y + c.target[1], o.z + c.target[2]);
+    } else {
+      this.camera.position.set(o.x, o.y + c.eye_height, o.z + c.distance);
+      this.controls.target.set(o.x, o.y + c.look_height, o.z);
+    }
+    this.camera.updateProjectionMatrix(); this.controls.update();
+    this.controls.enabled = false;
+    this.battleAspect = 4 / 3;
+    this.resize();
+  }
+  endBattleCamera() {
+    const s = this.savedCam;
+    if (!s) return;
+    this.savedCam = null; this.battleAspect = null; this.controls.enabled = true;
+    this.camera.fov = s.fov; this.camera.near = s.near; this.camera.far = s.far;
+    this.camera.position.copy(s.pos); this.controls.target.copy(s.target);
+    this.camera.updateProjectionMatrix(); this.controls.update(); this.resize();
+  }
+
+  /** Kamera auf die aktuelle Pose einstellen (Skelettverformung eingerechnet), z. B. für den
+   *  Vergleich DW3-Original / Import mit gleichem Bildausschnitt. */
+  framePose() {
+    if (!this.model) return;
+    this.model.updateMatrixWorld(true);
+    const box = new THREE.Box3(), tmp = new THREE.Box3(), p = new THREE.Vector3();
+    this.model.traverse(o => {
+      if (!o.isMesh || !o.geometry?.attributes?.position) return;
+      const pos = o.geometry.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        if (o.isSkinnedMesh) o.getVertexPosition(i, p); else p.fromBufferAttribute(pos, i);
+        p.applyMatrix4(o.matrixWorld); tmp.expandByPoint(p);
+      }
+    });
+    if (tmp.isEmpty()) return;
+    box.copy(tmp);
+    const size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+    const r = Math.max(size.x, size.y, size.z) || 1;
+    this.home.pos.set(c.x, box.min.y + size.y * 0.6, c.z + r * 2.1);
+    this.home.target.set(c.x, box.min.y + size.y * 0.45, c.z);
+    this.resetCamera();
+  }
+
   resetCamera() {
     this.camera.position.copy(this.home.pos);
     this.controls.target.copy(this.home.target);
@@ -337,6 +448,56 @@ export class Viewer {
     }
     this.actions.forEach(x => x.stop());
     this.actions[index]?.reset().play();
+  }
+
+  /** Animationseditor: Zeilen eines nativen Clips (wie Anim_StepModelAnim) und die Loop-Zeile. */
+  nativeClipInfo(index) {
+    const n = this.native, a = n?.payload.anims[index], f = a && n.files[a.file];
+    if (!f) return null;
+    const nb = n.player.bones;
+    let pos = 0, rows = 0, loop = null;
+    for (;;) {
+      if (a.offset + pos + nb > f.bytes.length || rows > 5000) break;
+      pos += nb; rows++;
+      const q = f.bytes[a.offset + pos];
+      if (q === 0xFF) break;
+      if (q === 0xFE) { loop = Math.floor((f.bytes[a.offset + pos + 1] | (f.bytes[a.offset + pos + 2] << 8)) / nb); break; }
+    }
+    return { rows, loop, id: a.id, name: a.name };
+  }
+
+  /** Animationseditor: Clip INDEX anhalten und Zeile ROW zeigen (Schleifen wie im Spiel). */
+  nativeSeek(index, row) {
+    const n = this.native, a = n?.payload.anims[index], f = a && n.files[a.file];
+    if (!f) return 0;
+    this.playing = false;
+    n.anim = a; n.animId = a.id; n.acc = 0; n.hold = 0;
+    n.player.set(f, a.offset);
+    if (row > 0) n.player.tick(2 * row);
+    this.applyPose(true);
+    return n.player.frame;
+  }
+
+  /** Aktuelle Zeile des laufenden nativen Clips. */
+  nativeRow() { return this.native ? this.native.player.frame : 0; }
+
+  /** Kleines Vorschaubild der aktuellen Ansicht (PNG-Data-URL), z. B. für die DW3-Liste. */
+  snapshot(size = 160) {
+    this.renderer.render(this.scene, this.camera);
+    const src = this.renderer.domElement, s = Math.min(src.width, src.height);
+    if (!s) return null;
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    c.getContext('2d').drawImage(src, (src.width - s) / 2, (src.height - s) / 2, s, s, 0, 0, size, size);
+    return c.toDataURL('image/png');
+  }
+
+  /** glTF-Animation (DW3-Original) an Bild FRAME (30 Bilder/s) anhalten. */
+  gltfSeek(index, frame) {
+    if (!this.mixer || !this.actions[index]) return;
+    this.actions.forEach(x => x.stop());
+    const act = this.actions[index];
+    act.reset().play(); act.paused = true;
+    this.mixer.setTime(frame / 30);
   }
 
   /** Abgelaufene Einmal-Animation neu starten (Play-Taste). */

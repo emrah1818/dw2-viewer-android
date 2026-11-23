@@ -1,4 +1,4 @@
-name: Android APK - DW2 3D Viewer
+name: Android APK - DW2 Mod Studio
 on:
   workflow_dispatch:
   push:
@@ -36,26 +36,55 @@ jobs:
         with:
           node-version: '22'
 
+      - uses: mymindstorm/setup-emsdk@v14
+
+      - name: DW3-Konverter bauen (nativ für Tests, WebAssembly für die Web-Version)
+        run: |
+          bash tools/build_dw3conv.sh native
+          bash tools/build_dw3conv.sh wasm
+
       - name: Tests der Android-Brücke und der Animationswiedergabe
         run: |
-          python -m pip install --upgrade pip numpy pillow
+          python -m pip install --upgrade pip numpy pillow pytest playwright
           python tests/test_android_api.py
           python tests/test_android_edit.py
           python tests/test_native_anim.py
           node tests/test_native_anim.mjs
+          node tests/test_dw3conv_wasm.mjs build/dw3conv/dw3conv.js build/dw3conv/dw3_converter
+
+      - name: Testsammlung des Mod Studios gegen den App-Kern (ohne SciPy/Qt/VTK), DNA im Image, DW3
+        run: bash tools/run_studio_tests.sh
+
+      - name: Oberflächentests (Handy-Hochformat, echter Python-Kern)
+        run: |
+          python -m playwright install --with-deps chromium
+          python tests/e2e_ui.py shots
+          python tests/e2e_v6.py shots
+
+      - name: Oberflächentest der Web-Version (Pyodide + WebAssembly-Konverter)
+        run: python tests/e2e_web.py shots
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: screenshots
+          path: shots
+
+      - name: DW3-Konverter für Android (NDK) bauen
+        run: bash tools/build_dw3conv.sh android
 
       - name: Build-Kennung
         run: |
           VER=$(sed -n 's/.*versionName = "\(.*\)".*/\1/p' app/build.gradle.kts)
           if [ "$GITHUB_REF_NAME" = "main" ]; then
-            echo "APK_NAME=DW2_3D_Viewer_v$VER.apk" >> "$GITHUB_ENV"
+            echo "APK_NAME=DW2_Mod_Studio_Android_v$VER.apk" >> "$GITHUB_ENV"
             echo "REL_TAG=v$VER" >> "$GITHUB_ENV"
-            echo "REL_NAME=DW2 Mobile 3D Viewer v$VER" >> "$GITHUB_ENV"
+            echo "REL_NAME=DW2 Mod Studio für Android v$VER" >> "$GITHUB_ENV"
             echo "REL_PRE=false" >> "$GITHUB_ENV"
           else
-            echo "APK_NAME=DW2_3D_Viewer_v4.2_Full_Animation_Support_test.apk" >> "$GITHUB_ENV"
-            echo "REL_TAG=test-full-animation-support" >> "$GITHUB_ENV"
-            echo "REL_NAME=DW2 Mobile 3D Viewer – Test-Build ($GITHUB_REF_NAME)" >> "$GITHUB_ENV"
+            echo "APK_NAME=DW2_Mod_Studio_Android_v${VER}_test.apk" >> "$GITHUB_ENV"
+            echo "REL_TAG=test-v$VER" >> "$GITHUB_ENV"
+            echo "REL_NAME=DW2 Mod Studio für Android v$VER – Test-Build ($GITHUB_REF_NAME)" >> "$GITHUB_ENV"
             echo "REL_PRE=true" >> "$GITHUB_ENV"
           fi
 
@@ -70,11 +99,13 @@ jobs:
         run: |
           APK=$(ls app/build/outputs/apk/debug/*.apk)
           unzip -l "$APK" | grep -E "assets/www/index.html|assets/www/lib/three.module.js|libpython"
+          unzip -l "$APK" | grep -E "lib/arm64-v8a/libdw3conv.so"
+          unzip -l "$APK" | grep -E "lib/x86_64/libdw3conv.so"
           cp "$APK" "$APK_NAME"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: DW2-3D-Viewer-test-apk
+          name: DW2-Mod-Studio-Android-apk
           path: ${{ env.APK_NAME }}
 
       - name: APK als Release veröffentlichen (main = Version aus build.gradle.kts, sonst Test-Build)
@@ -87,7 +118,7 @@ jobs:
           target_commitish: ${{ github.sha }}
           files: ${{ env.APK_NAME }}
           body: |
-            ${{ env.REL_PRE == 'false' && 'Vollständige Animationsunterstützung, PS1-Darstellung (Rückseiten, Mischmodi), adaptives App-Symbol, Original-Hintergrund von Digimon World 2 mit grünem Statusfenster und Original-Schatten. Auf dem Handy herunterladen und installieren.' || format('Automatischer Test-Build ({0}, {1}). Keine finale Veröffentlichung.', github.ref_name, github.sha) }}
+            ${{ env.REL_PRE == 'false' && 'DW2 Mod Studio 6.0 für Android: Digimon aus Digimon World 3 einfügen, Digitationslinien und DNA-Digitation direkt im PS1-Image bearbeiten, Animationseditor, Attacken, Domains und mehr. Bearbeitet nur dein eigenes BIN/ISO-Image. Auf dem Handy herunterladen und installieren.' || format('Automatischer Test-Build ({0}, {1}). Keine finale Veröffentlichung.', github.ref_name, github.sha) }}
 
       # Für die Veröffentlichung: signiertes Release-Bundle, nur wenn die Secrets gesetzt sind.
       - name: Release-Signatur vorbereiten
@@ -116,3 +147,31 @@ jobs:
           path: |
             app/build/outputs/bundle/release/*.aab
             app/build/outputs/apk/release/*.apk
+
+  # Echte App im Android-Emulator: DW3-Konverter (NDK) ausführen, App starten.
+  emulator:
+    needs: apk
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: DW2-Mod-Studio-Android-apk
+          path: apk
+      - name: KVM für den Emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules && sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          script: bash tools/emulator_smoke.sh apk/*.apk
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: emulator-screenshot
+          path: shots_emulator_start.png

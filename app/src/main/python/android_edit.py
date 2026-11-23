@@ -197,7 +197,11 @@ def inspect_3d(path, identifier=None):
     token = uuid.uuid4().hex
     folder = _work('import', token)
     copy = folder / ('model' + suffix)
-    shutil.copy2(path, copy)
+    if suffix in ('.gltf', '.glb', '.obj'):
+        from dw2studio.core.model_import import stage_model
+        copy, manifest = stage_model(path, folder)
+    else:
+        shutil.copy2(path, copy)
     job = {'kind': 'model', 'path': copy, 'folder': folder, 'suffix': suffix, 'name': path.name}
     result = {'token': token, 'name': path.name, 'view': _url(copy) if suffix in ('.gltf', '.glb', '.obj') else None,
               'format': suffix.lstrip('.')}
