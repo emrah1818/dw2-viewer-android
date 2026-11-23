@@ -44,7 +44,7 @@ def _work(*parts):
 
 
 def _url(path):
-    return Path(path).relative_to(api.CACHE).as_posix()
+    return Path(path).resolve().relative_to(api.CACHE.resolve()).as_posix()
 
 
 def _native_image(data, region, eyes):

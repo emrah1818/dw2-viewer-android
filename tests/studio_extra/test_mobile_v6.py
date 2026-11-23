@@ -88,3 +88,27 @@ def test_dw3_disc_open_prepare_with_converter(tmp_path):
     with zipfile.ZipFile(out['path']) as z:
         assert {'model.glb', 'native_source.json'} <= set(z.namelist())
     os.environ.pop('DW3_CONVERTER', None)
+
+
+def test_files_dir_behind_a_symlink_like_android(tmp_path):
+    """Android: /data/user/0/<app>/files verweist auf /data/data/<app>/files. Fehler aus dem
+    Handytest 6.0: DW3-Modell „Ansehen“ meldete „… is not in the subpath of …“."""
+    exe = Path('tools/dw3_converter/dw3_converter').resolve()
+    if not exe.is_file():
+        pytest.skip('nativer Konverter nicht gebaut')
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from fixture_dw3 import make_dw3_iso
+    (tmp_path / 'data').mkdir()
+    (tmp_path / 'user0').symlink_to(tmp_path / 'data')
+    lib = tmp_path / 'lib'
+    lib.mkdir()
+    (lib / 'libdw3conv.so').write_bytes(exe.read_bytes())
+    os.chmod(lib / 'libdw3conv.so', 0o755)
+    api.configure(str(tmp_path / 'user0'), str(lib))
+    call('open_dw3', str(make_dw3_iso(tmp_path)))
+    model = call('prepare_dw3', 0)
+    shown = call('inspect_3d', model['path'])                       # „Ansehen / bisherige Knochenzuordnung“
+    assert shown['view'].endswith('.glb')
+    unresolved = str(tmp_path / 'user0' / 'viewer' / model['url'])  # Pfad, wie Kotlin ihn liefern könnte
+    assert call('inspect_3d', unresolved)['view'].endswith('.glb')
+    os.environ.pop('DW3_CONVERTER', None)

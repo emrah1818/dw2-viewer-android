@@ -67,7 +67,9 @@ def main():
     tmp = Path(tempfile.mkdtemp())
     lib = tmp / 'lib'; lib.mkdir()
     shutil.copy(ROOT / 'build/dw3conv/dw3_converter', lib / 'libdw3conv.so')
-    api.configure(str(tmp / 'files'), str(lib))
+    # wie Android: filesDir (/data/user/0/…) ist ein Verweis auf /data/data/…
+    (tmp / 'data').mkdir(); (tmp / 'user0').symlink_to(tmp / 'data')
+    api.configure(str(tmp / 'user0'), str(lib))
     pak = make_pak(tmp / 'port')
     iso = make_iso(tmp)
     dw3 = make_dw3_iso(tmp)
@@ -164,6 +166,22 @@ def main():
         step('DW3-Modell umgewandelt und angezeigt', msg == '' and page.locator('#page-view').is_visible(), msg)
         page.screenshot(path=SHOTS / 'v6_04_dw3.png')
         step('„Einzeln importieren“ vorhanden', page.locator('#dw3-list [data-one]').count() == 1)
+
+        # Kopfzeile „DW3“ → Modell → „Ansehen / bisherige Knochenzuordnung“ (Fehler im Handytest 6.0)
+        picks_before = len(bridge.picks)
+        page.click('#btn-dw3'); page.wait_for_selector('#modal-box .opt', timeout=20000)
+        step('DW3-Knopf nutzt das offene Abbild (keine neue Dateiauswahl)', len(bridge.picks) == picks_before)
+        page.locator('#modal-box .opt').first.click()
+        page.wait_for_selector('#modal-box button[data-c="open"]'); page.click('#modal-box button[data-c="open"]'); idle()
+        page.wait_for_timeout(1500)
+        toast = page.inner_text('#toast') if page.locator('#toast').is_visible() else ''
+        dialog = page.locator('#modal-box button[data-c="view"]').count() == 1
+        if dialog:
+            page.click('#modal-box button[data-c="view"]'); page.wait_for_timeout(1500)
+        step('DW3 „Ansehen“ ohne Pfadfehler', dialog and 'subpath' not in toast and not toast.startswith('Fehler'), toast[:160])
+        step('DW3-Modell „Nur ansehen“ angezeigt', 'Import' in page.inner_text('#edit-state'), page.inner_text('#edit-state'))
+
+        page.screenshot(path=SHOTS / 'v6_04b_dw3_ansehen.png')
 
         # DNA-Digitation im Image (Attrappe des Digi-Labor-Overlays mit Originaltabelle)
         ov = dnafix.overlay(); dna_image.OVERLAY_SHA1 = hashlib.sha1(ov).hexdigest()

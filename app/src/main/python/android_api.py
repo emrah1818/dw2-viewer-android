@@ -123,6 +123,9 @@ def configure(files_dir, native_dir, data_dir=None):
         os.environ['DW2_DATA_DIR'] = str(data_dir)
     CACHE = Path(files_dir) / 'viewer'
     CACHE.mkdir(parents=True, exist_ok=True)
+    # Android: filesDir heißt /data/user/0/<app>/files, ist aber ein Verweis auf /data/data/<app>/files.
+    # Mit dem aufgelösten Pfad passen alle relative_to-Vergleiche (6.0: DW3 „Ansehen“).
+    CACHE = CACHE.resolve()
     NATIVE_DIR = native_dir
     if native_dir and (Path(native_dir) / 'libdw3conv.so').is_file():
         # Android: DW3-Konverter als ausführbares Programm im nativeLibraryDir (tools/build_dw3conv.sh android)

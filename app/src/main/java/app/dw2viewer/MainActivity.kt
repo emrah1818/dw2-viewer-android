@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.view.ViewGroup
 import android.webkit.JavascriptInterface
@@ -174,12 +175,21 @@ class MainActivity : AppCompatActivity() {
             val folder = File(filesDir, when (kind) { "image" -> "images"; "dw3" -> "dw3images"; else -> "imports" }).apply { mkdirs() }
             val name = (query(uri, OpenableColumns.DISPLAY_NAME) ?: "datei").replace(Regex("[^A-Za-z0-9._ -]"), "_")
             val size = query(uri, OpenableColumns.SIZE)?.toLongOrNull() ?: -1L
+            val target = File(folder, name)
+            // DW3-Abbild (wird nie verändert): dieselbe Datei nicht erneut kopieren (mehrere hundert MB).
+            val stamp = "$uri|$size|" + (runCatching { query(uri, DocumentsContract.Document.COLUMN_LAST_MODIFIED) }.getOrNull() ?: "")
+            val stampFile = File(folder, ".quelle")
+            if (kind == "dw3" && size > 0 && target.isFile && target.length() == size &&
+                stampFile.isFile && stampFile.readText() == stamp) {
+                progress("DW3-Dateien werden gesucht …", -1)
+                resolve(id, py.call("open_dw3", JSONArray().put(target.absolutePath).toString()))
+                return
+            }
             if (kind == "image" || kind == "dw3") folder.listFiles()?.forEach { it.delete() }   // nur ein Image gleichzeitig
             if (size > 0 && folder.usableSpace < size + (64L shl 20)) {
                 resolve(id, error("Zu wenig Speicherplatz: ${size shr 20} MB nötig, ${folder.usableSpace shr 20} MB frei."))
                 return
             }
-            val target = File(folder, name)
             var copied = 0L
             var last = -1
             contentResolver.openInputStream(uri)!!.use { input ->
@@ -195,6 +205,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
+            if (kind == "dw3") stampFile.writeText(stamp)
             if (kind == "image") {
                 imageUri = uri
                 imagePath = target.absolutePath

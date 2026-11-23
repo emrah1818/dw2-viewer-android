@@ -506,7 +506,10 @@ $('#b-3d-import').onclick = async () => {
   $('#btn-open').parentNode.appendChild(b);
   b.onclick = async () => {
     try {
-      const info = await busy('DW3-Dateien werden gesucht …', () => native('pick_dw3'));
+      // Schon geöffnetes DW3-Abbild weiterverwenden (auf dem Handy dauert das Übernehmen des Abbilds lange);
+      // ein anderes Abbild öffnet der Reiter DW3-Import („DW3-Abbild öffnen“).
+      let info = MOBILE ? await native('dw3_models') : null;
+      if (!info?.open) info = await busy('DW3-Dateien werden gesucht …', () => native('pick_dw3'));
       if (!info) return;
       const id = await pickBox(`${info.name} · ${info.models.length} Modelle`, info.models.map(m => ({ value: m.id, label: dw3Label(m) })), null);
       if (id == null) return;
