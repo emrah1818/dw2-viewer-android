@@ -12,7 +12,7 @@ LIBDIR=$(adb shell pm dump $PKG | sed -n 's/^ *legacyNativeLibraryDir=\(.*\)$/\1
 echo "nativeLibraryDir-Basis: $LIBDIR"
 CONV=$(adb shell "ls $LIBDIR/*/libdw3conv.so" | head -1 | tr -d '\r')
 echo "Konverter: $CONV"
-adb shell run-as $PKG sh -c "'cp /data/local/tmp/mini.bin files/mini.bin && rm -rf files/dw3out && $CONV files/mini.bin files/dw3out && ls -l files/dw3out'" | tee /tmp/conv.txt
+adb shell run-as $PKG sh -c "'mkdir -p files && cp /data/local/tmp/mini.bin files/mini.bin && rm -rf files/dw3out && $CONV files/mini.bin files/dw3out && ls -l files/dw3out'" | tee /tmp/conv.txt
 grep -q model.glb /tmp/conv.txt && grep -q native_source.json /tmp/conv.txt
 echo "OK  DW3-Konverter läuft auf Android"
 adb logcat -c
